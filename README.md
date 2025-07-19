@@ -1,4 +1,4 @@
-# Trello Clone Board View
+# evoSGA - Sistema Geral de Administração
 
 Um clone moderno do Trello com interface de quadro construído com React, TypeScript e Supabase.
 

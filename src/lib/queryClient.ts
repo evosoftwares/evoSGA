@@ -6,8 +6,8 @@ const logger = createLogger('QueryClient');
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes - dados ficam fresh por 5 min
-      gcTime: 10 * 60 * 1000, // 10 minutes - cache garbage collection
+      staleTime: 0, // NO CACHE - dados sempre stale
+      gcTime: 0, // NO CACHE - remove imediatamente
       retry: (failureCount, error: any) => {
         // Não retry em erros 4xx (cliente)
         if (error?.status >= 400 && error?.status < 500) {
@@ -17,8 +17,8 @@ export const queryClient = new QueryClient({
         return failureCount < 2;
       },
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      refetchOnWindowFocus: false, // Evita refetch desnecessário
-      refetchOnMount: false, // Usa cache se ainda estiver fresh
+      refetchOnWindowFocus: true, // SEMPRE refetch
+      refetchOnMount: true, // SEMPRE refetch
       refetchOnReconnect: 'always',
     },
     mutations: {
@@ -41,7 +41,6 @@ export const QUERY_KEYS = {
   tags: ['tags'] as const,
   taskTags: ['taskTags'] as const,
   referenceData: ['referenceData'] as const,
-  activityHistory: (filters?: any) => ['activityHistory', filters] as const,
 } as const;
 
 // Utility para invalidar queries relacionadas
@@ -57,14 +56,13 @@ export const invalidateRelatedQueries = async (
       invalidations.push(
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban(projectId) }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.tasks(projectId) }),
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.taskTags }),
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.activityHistory() })
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.taskTags })
       );
       break;
     case 'project':
       invalidations.push(
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects }),
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban() })
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban(projectId) })
       );
       break;
     case 'kanban':

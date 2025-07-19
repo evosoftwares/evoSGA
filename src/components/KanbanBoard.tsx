@@ -4,11 +4,13 @@ import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Trophy, Star, Sparkles } from 'lucide-react';
 import Confetti from 'react-confetti';
 import { createLogger } from '@/utils/logger';
-import { useKanbanData } from '@/hooks/useKanbanData';
+import { useOptimizedKanbanData } from '@/hooks/useOptimizedKanbanData';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useProjectContext } from '@/contexts/ProjectContext';
 import { useSecurityCheck } from '@/hooks/useSecurityCheck';
 import { useUserPoints } from '@/hooks/useUserPoints';
+import { useTaskCommentCounts } from '@/hooks/useTaskCommentCounts';
+import { useProjectsRealTime } from '@/hooks/useProjectsRealTime';
 import KanbanColumn from './KanbanColumn';
 import { TaskDetailModal } from './modals/TaskDetailModal';
 import TeamMember from './TeamMember';
@@ -16,6 +18,8 @@ import { Task, Column } from '@/types/database';
 import ProjectsSummary from './ProjectsSummary';
 import { SecurityAlert } from '@/components/ui/security-alert';
 import ErrorBoundary from './ErrorBoundary';
+import { RealtimeDebug } from './debug/RealtimeDebug';
+import { SimpleRealtimeTest } from './debug/SimpleRealtimeTest';
 
 const logger = createLogger('KanbanBoard');
 
@@ -23,6 +27,15 @@ const KanbanBoard = () => {
   const { selectedProjectId } = useProjectContext();
   const { projects } = useProjectData();
   const { getTaskPointAward, userPoints } = useUserPoints();
+  
+  // Activate real-time subscriptions
+  useProjectsRealTime();
+  
+  // Log para debug - removido para limpar console
+  // useEffect(() => {
+  //   console.log('KanbanBoard: selectedProjectId changed:', selectedProjectId);
+  // }, [selectedProjectId]);
+  
   const { 
     isSecurityAlertOpen, 
     showSecurityAlert, 
@@ -44,7 +57,11 @@ const KanbanBoard = () => {
     updateTask,
     deleteTask,
     refreshData
-  } = useKanbanData(selectedProjectId);
+  } = useOptimizedKanbanData(selectedProjectId);
+
+  // Get comment counts for all tasks
+  const taskIds = useMemo(() => tasks.map(task => task.id), [tasks]);
+  const { data: commentCounts = {} } = useTaskCommentCounts(taskIds);
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
@@ -61,6 +78,18 @@ const KanbanBoard = () => {
 
   // Refs for cleanup
   const celebrationTimeouts = useRef<NodeJS.Timeout[]>([]);
+
+  // Wrapper function to adapt updateTask signature for TaskDetailModal
+  const updateTaskWrapper = useCallback(
+    async (taskId: string, updates: Partial<Omit<Task, 'id'>>) => {
+      return updateTask({ 
+        taskId, 
+        updates, 
+        projectId: selectedProjectId || null 
+      });
+    },
+    [updateTask, selectedProjectId]
+  );
 
   // Cleanup function for timeouts
   const clearAllTimeouts = useCallback(() => {
@@ -256,22 +285,50 @@ const KanbanBoard = () => {
 
   // Calcular estatísticas dos membros com memoização
   const teamMembersWithStats = useMemo(() => {
+    // First, identify the IDs of "completed" columns
+    const completedColumnIds = new Set(
+      columns
+        .filter(col => {
+          const title = col.title?.toLowerCase() || '';
+          return (
+            title.includes('concluído') ||
+            title.includes('concluido') ||
+            title.includes('completed') ||
+            title.includes('done') ||
+            title.includes('sucesso') ||
+            title.includes('success')
+          );
+        })
+        .map(col => col.id)
+    );
+
     return profiles.map(member => {
+      // Filter tasks for the current member
       const memberTasks = tasks.filter(task => task.assignee === member.id);
-      const currentTaskPoints = memberTasks.reduce((sum, task) => sum + (task.function_points || 0), 0);
-      
-      // Find earned points using only user_id for consistency
+
+      // Filter out tasks that are in a "completed" column
+      const activeTasks = memberTasks.filter(
+        task => !completedColumnIds.has(task.column_id)
+      );
+
+      // Calculate points only for active tasks
+      const currentTaskPoints = activeTasks.reduce(
+        (sum, task) => sum + (task.function_points || 0),
+        0
+      );
+
+      // Find total earned points for the user
       const earnedPointsData = userPoints.find(up => up.user_id === member.id);
       const earnedPoints = earnedPointsData?.total_points || 0;
-      
+
       return {
         ...member,
-        taskCount: memberTasks.length,
-        functionPoints: currentTaskPoints, // Current task points
-        earnedPoints: earnedPoints // Total earned points from completed tasks
+        taskCount: activeTasks.length, // Count only active tasks
+        functionPoints: currentTaskPoints, // Current (active) task points
+        earnedPoints: earnedPoints, // Total earned points from all completed tasks
       };
     });
-  }, [profiles, tasks, userPoints]);
+  }, [profiles, tasks, userPoints, columns]); // Add 'columns' to dependency array
 
   if (loading) {
     return (
@@ -399,6 +456,7 @@ const KanbanBoard = () => {
                   projects={projects}
                   profiles={profiles}
                   columns={columns}
+                  commentCounts={commentCounts}
                   onAddTask={handleQuickAddTask}
                   onTaskClick={setSelectedTask}
                 />
@@ -419,7 +477,7 @@ const KanbanBoard = () => {
             projects={projects}
             tags={tags}
             taskTags={taskTags}
-            updateTask={updateTask}
+            updateTask={updateTaskWrapper}
             deleteTask={deleteTask}
             refreshData={refreshData}
           />
@@ -453,6 +511,8 @@ const KanbanBoard = () => {
         title={securityTitle}
         description={securityDescription}
       />
+      
+      {/* Debug Components removed - Real-time working perfectly */}
     </div>
   );
 };

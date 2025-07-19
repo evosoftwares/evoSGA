@@ -1,5 +1,8 @@
 import { useBatchKanbanData } from './kanban/useBatchKanbanData';
 import { useOptimizedKanbanMutations } from './kanban/useOptimizedKanbanMutations';
+import { useTasksRealTime } from './useTasksRealTime';
+import { useTagsRealTime } from './useTagsRealTime';
+import { usePollingFallback } from './usePollingFallback';
 
 export const useOptimizedKanbanData = (selectedProjectId?: string | null) => {
   // Use batch data fetching
@@ -12,6 +15,13 @@ export const useOptimizedKanbanData = (selectedProjectId?: string | null) => {
 
   // Use optimized mutations
   const mutations = useOptimizedKanbanMutations(selectedProjectId);
+
+  // Set up real-time subscriptions for tasks and tags
+  useTasksRealTime(selectedProjectId);
+  useTagsRealTime();
+  
+  // Add polling fallback for testing
+  usePollingFallback(selectedProjectId);
 
   // Return data with fallbacks
   const columns = data?.columns || [];
