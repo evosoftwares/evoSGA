@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { KanbanColumn, Task, Profile, Tag, TaskTag } from '@/types/database';
 import { createLogger } from '@/utils/logger';
@@ -14,10 +14,28 @@ export const useKanbanDataFetch = () => {
   const [taskTags, setTaskTags] = useState<TaskTag[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isFetchingRef = useRef(false);
 
   const fetchAllData = useCallback(async (selectedProjectId?: string | null) => {
+    // Prevent multiple simultaneous calls
+    if (isFetchingRef.current) {
+      logger.debug('Fetch already in progress, skipping');
+      return;
+    }
+    
+    isFetchingRef.current = true;
     setLoading(true);
     setError(null);
+    
+    // Safety timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (isFetchingRef.current) {
+        logger.error('Fetch timeout - forcing completion');
+        isFetchingRef.current = false;
+        setLoading(false);
+        setError('Timeout ao carregar dados');
+      }
+    }, 5000); // 5 second timeout
     
     try {
       logger.info('Starting data fetch...');
@@ -93,6 +111,8 @@ export const useKanbanDataFetch = () => {
       logger.error('Error fetching data', err);
       setError(err.message);
     } finally {
+      clearTimeout(timeoutId);
+      isFetchingRef.current = false;
       setLoading(false);
     }
   }, []);

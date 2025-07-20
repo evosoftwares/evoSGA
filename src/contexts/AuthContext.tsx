@@ -3,7 +3,6 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AuthContextType, Profile } from '@/types/auth';
-import { useManualProfileCreation } from '@/hooks/useManualProfileCreation';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('AUTH');
@@ -16,7 +15,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
-  const { ensureProfileExists } = useManualProfileCreation();
   const initializingRef = useRef(false);
 
   const fetchProfile = async (userId: string) => {
@@ -54,25 +52,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    // Force loading to false after timeout to prevent infinite loading
+    const handleTimeout = setTimeout(() => {
+      logger.warn('HandleAuthUser timeout - forcing loading to false');
+      setLoading(false);
+    }, 5000); // Reduced to 5 seconds
+
     try {
       logger.debug('Handling auth user', currentUser.email);
       
-      // Tentar buscar perfil existente primeiro
-      let profileData = await fetchProfile(currentUser.id);
+      // Tentar buscar perfil existente primeiro com timeout menor
+      const profileData = await Promise.race([
+        fetchProfile(currentUser.id),
+        new Promise<Profile | null>((resolve) => 
+          setTimeout(() => resolve(null), 3000) // 3 second timeout for profile fetch
+        )
+      ]);
       
-      // Se não encontrou, tentar criar
-      if (!profileData) {
-        logger.debug('Profile not found, creating');
-        profileData = await ensureProfileExists(currentUser);
-        
-        if (profileData) {
-          setProfile(profileData);
-        }
+      if (profileData) {
+        setProfile(profileData);
+      } else {
+        logger.debug('Profile not found or timeout, will continue without profile');
+        setProfile(null);
       }
     } catch (err) {
       logger.error('Error handling auth user', err);
       setProfile(null);
     } finally {
+      clearTimeout(handleTimeout);
       setLoading(false);
     }
   };
@@ -88,6 +95,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializingRef.current = true;
 
     const initializeAuth = async () => {
+      // Force loading to false after timeout to prevent infinite loading
+      const initTimeout = setTimeout(() => {
+        if (mounted) {
+          logger.warn('Init timeout - forcing loading to false');
+          setLoading(false);
+          setInitialized(true);
+        }
+      }, 8000); // 8 second timeout
+      
       try {
         logger.debug('Initializing auth');
         
@@ -122,6 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setInitialized(true);
         }
       } finally {
+        clearTimeout(initTimeout);
         initializingRef.current = false;
       }
     };
@@ -155,7 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [ensureProfileExists]);
+  }, []); // Remove dependência problemática
 
   const signIn = async (email: string, password: string) => {
     try {

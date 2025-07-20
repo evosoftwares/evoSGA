@@ -1,5 +1,5 @@
 import React from 'react';
-import { useProjectsSummary } from '@/hooks/useProjectsSummary';
+import { useProjectsSummaryQuery } from '@/hooks/useProjectsSummaryQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal } from 'lucide-react';
 
 const ProjectsSummary = () => {
-  const { projectsSummary, loading, error } = useProjectsSummary();
+  const { data: projectsSummary = [], isLoading: loading, error } = useProjectsSummaryQuery();
 
   if (loading) {
     return (
@@ -37,7 +37,7 @@ const ProjectsSummary = () => {
         <Terminal className="h-4 w-4" />
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
-          Failed to load projects summary: {error}
+          Failed to load projects summary: {error instanceof Error ? error.message : 'Unknown error'}
         </AlertDescription>
       </Alert>
     );

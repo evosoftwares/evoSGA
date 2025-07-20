@@ -2,7 +2,7 @@
 import { useEffect, useCallback, useState } from 'react';
 import { Task } from '@/types/database';
 import { useKanbanDataFetch } from './kanban/useKanbanDataFetch';
-import { useKanbanMutations } from './kanban/useKanbanMutations';
+import { useOptimizedKanbanMutations } from './kanban/useOptimizedKanbanMutations';
 
 export const useKanbanData = (selectedProjectId?: string | null) => {
   const {
@@ -23,11 +23,7 @@ export const useKanbanData = (selectedProjectId?: string | null) => {
 
   const [internalError, setInternalError] = useState<string | null>(null);
 
-  const { moveTask, createTask, updateTask, deleteTask, fixAllPositions } = useKanbanMutations({
-    tasks,
-    setTasks,
-    setError: setInternalError
-  });
+  const { moveTask, createTask, updateTask, deleteTask } = useOptimizedKanbanMutations(selectedProjectId);
 
   const refreshData = useCallback(() => {
     fetchAllData(selectedProjectId);
@@ -35,7 +31,7 @@ export const useKanbanData = (selectedProjectId?: string | null) => {
 
   useEffect(() => {
     fetchAllData(selectedProjectId);
-  }, [selectedProjectId, fetchAllData]);
+  }, [selectedProjectId]); // Removida dependência de fetchAllData
 
   return {
     columns,
@@ -50,7 +46,6 @@ export const useKanbanData = (selectedProjectId?: string | null) => {
     createTask,
     updateTask,
     deleteTask,
-    fixAllPositions,
     refreshData
   };
 };

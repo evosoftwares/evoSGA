@@ -91,6 +91,17 @@ const KanbanBoard = () => {
     [updateTask, selectedProjectId]
   );
 
+  // Wrapper function to adapt deleteTask signature for TaskDetailModal
+  const deleteTaskWrapper = useCallback(
+    async (taskId: string) => {
+      return deleteTask({ 
+        taskId, 
+        projectId: selectedProjectId || null 
+      });
+    },
+    [deleteTask, selectedProjectId]
+  );
+
   // Cleanup function for timeouts
   const clearAllTimeouts = useCallback(() => {
     celebrationTimeouts.current.forEach(timeout => clearTimeout(timeout));
@@ -259,7 +270,7 @@ const KanbanBoard = () => {
   const handleQuickAddTask = async (columnId: string, title: string) => {
     logger.info('Creating quick task', { columnId, title });
     try {
-      await createTask({ title }, columnId);
+      await createTask({ taskData: { title }, columnId, projectId: selectedProjectId });
       logger.info('Task creation completed');
     } catch (error) {
       logger.error('Task creation failed', error);
@@ -271,7 +282,7 @@ const KanbanBoard = () => {
 
     const performCreate = async () => {
       logger.info('Creating task', { columnId: creatingTaskColumn, data: taskData });
-      await createTask(taskData, creatingTaskColumn);
+      await createTask({ taskData, columnId: creatingTaskColumn, projectId: selectedProjectId });
       setIsCreatingTask(false);
       setCreatingTaskColumn(null);
     };
@@ -478,7 +489,7 @@ const KanbanBoard = () => {
             tags={tags}
             taskTags={taskTags}
             updateTask={updateTaskWrapper}
-            deleteTask={deleteTask}
+            deleteTask={deleteTaskWrapper}
             refreshData={refreshData}
           />
         </ErrorBoundary>
@@ -497,7 +508,7 @@ const KanbanBoard = () => {
             tags={tags}
             taskTags={[]}
             createTask={handleCreateTask}
-            deleteTask={deleteTask}
+            deleteTask={deleteTaskWrapper}
             refreshData={refreshData}
           />
         </ErrorBoundary>

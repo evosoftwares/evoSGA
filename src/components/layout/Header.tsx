@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Settings, History } from 'lucide-react';
+import { LogOut, Settings, FolderOpen, Kanban, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,31 +35,18 @@ const Header = () => {
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="flex items-center justify-between px-6 py-4">
+      <div className="flex items-center justify-between px-6 py-1">
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center">
             <img 
               src="/imagens/logo.svg" 
               alt="Logo" 
-              className="h-8 w-8"
+              className="h-20 w-20"
             />
-            <h1 className="text-xl font-bold text-gray-900">
-              Kanban Board
-            </h1>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/activity-history')}
-            className="flex items-center gap-2"
-          >
-            <History className="w-4 h-4" />
-            Histórico
-          </Button>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
@@ -78,6 +65,18 @@ const Header = () => {
                   {user?.email}
                 </p>
               </div>
+              <DropdownMenuItem onClick={() => navigate('/')}>
+                <Kanban className="mr-2 h-4 w-4" />
+                <span>Kanban Board</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/vendas')}>
+                <TrendingUp className="mr-2 h-4 w-4" />
+                <span>Pipeline de Vendas</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/arquivos')}>
+                <FolderOpen className="mr-2 h-4 w-4" />
+                <span>Arquivos</span>
+              </DropdownMenuItem>
               <DropdownMenuItem>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Configurações</span>

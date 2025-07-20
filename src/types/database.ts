@@ -157,3 +157,91 @@ export interface UserPointAwardDetailed {
   project_name?: string;
   project_color?: string;
 }
+
+// Sales System Types
+export interface SalesColumn {
+  id: string;
+  title: string;
+  position: number;
+  color: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SalesOpportunity {
+  id: string;
+  title: string;
+  description?: string;
+  column_id: string;
+  position: number;
+  assignee?: string | null;
+  project_id?: string | null;
+  
+  // Sales-specific fields
+  deal_value: number;
+  currency: string;
+  probability: number;
+  expected_close_date?: string;
+  source?: string;
+  
+  // Client information
+  client_name?: string;
+  client_email?: string;
+  client_phone?: string;
+  client_company?: string;
+  client_website?: string;
+  client_industry?: string;
+  
+  // Status tracking
+  lost_reason?: string;
+  won_date?: string;
+  lost_date?: string;
+  
+  // Metadata
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface SalesTag {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+export interface SalesOpportunityTag {
+  opportunity_id: string;
+  tag_id: string;
+}
+
+export interface SalesComment {
+  id: string;
+  opportunity_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SalesActivity {
+  id: string;
+  opportunity_id: string;
+  user_id: string;
+  activity_type: 'call' | 'email' | 'meeting' | 'proposal_sent' | 'demo' | 'follow_up' | 'other';
+  title?: string;
+  description?: string;
+  scheduled_at?: string;
+  completed_at?: string;
+  created_at: string;
+}
+
+export interface SalesMetricsHistory {
+  id: string;
+  opportunity_id: string;
+  user_id?: string;
+  field_changed: string;
+  old_value?: string;
+  new_value?: string;
+  changed_at: string;
+}

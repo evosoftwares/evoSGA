@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Task } from '@/types/database';
 import { QUERY_KEYS, invalidateRelatedQueries } from '@/lib/queryClient';
-import { useActivityLogger } from '@/hooks/useActivityLogger';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/utils/logger';
 
@@ -19,7 +18,6 @@ interface TaskMoveParams {
   sourceColumnId: string;
   newColumnId: string;
   newPosition?: number;
-  currentTasks: Task[];
 }
 
 interface TaskCreateParams {
@@ -116,7 +114,6 @@ const calculateOptimisticUpdates = (
 
 export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) => {
   const queryClient = useQueryClient();
-  const { logActivity } = useActivityLogger();
   const { user } = useAuth();
 
   // Optimistic update helper
@@ -137,12 +134,20 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
 
   // Move task mutation
   const moveTaskMutation = useMutation({
-    mutationFn: async ({ taskId, sourceColumnId, newColumnId, newPosition = 0, currentTasks }: TaskMoveParams) => {
-      const taskToMove = currentTasks.find(t => t.id === taskId);
+    mutationFn: async ({ taskId, sourceColumnId, newColumnId, newPosition = 0 }: Omit<TaskMoveParams, 'currentTasks'>) => {
+      // Get current tasks from React Query cache
+      const kanbanData = queryClient.getQueryData(QUERY_KEYS.kanban(selectedProjectId)) as any;
+      const currentTasks = kanbanData?.tasks || [];
+      
+      if (!currentTasks.length) {
+        throw new Error('No tasks data available');
+      }
+      
+      const taskToMove = currentTasks.find((t: any) => t.id === taskId);
       if (!taskToMove) throw new Error('Task not found');
 
       const calculatedPosition = newPosition ?? Math.max(
-        ...currentTasks.filter(t => t.column_id === newColumnId).map(t => t.position),
+        ...currentTasks.filter((t: any) => t.column_id === newColumnId).map((t: any) => t.position),
         -1
       ) + 1;
 
@@ -165,40 +170,54 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
 
       if (error) throw error;
 
-      // Log activity if column changed
-      if (taskToMove.column_id !== newColumnId) {
-        await logActivity(
-          'task',
-          taskId,
-          'move',
-          { 
-            column_id: taskToMove.column_id, 
-            position: taskToMove.position,
-            title: taskToMove.title 
-          },
-          { 
-            column_id: newColumnId, 
-            position: calculatedPosition,
-            title: taskToMove.title 
-          },
-          { 
-            from_column: taskToMove.column_id,
-            to_column: newColumnId,
-            project_id: taskToMove.project_id
-          }
-        );
-      }
+      // Activity logging removed
 
       return { taskId, updates };
     },
     onError: (error, variables) => {
       logger.error('Move task error', error);
-      // Revert optimistic updates by refetching
+      // Revert optimistic updates by refetching - only on error
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban(selectedProjectId) });
     },
-    onSettled: () => {
-      // Invalidate related queries
-      invalidateRelatedQueries(queryClient, 'task', selectedProjectId);
+    onSettled: async (data, error, variables) => {
+      // Only invalidate cache if task moved between columns (not for position changes within same column)
+      const isColumnChange = variables.sourceColumnId !== variables.newColumnId;
+      
+      if (!error && isColumnChange) {
+        logger.info('Task moved between columns - invalidating cache', {
+          from: variables.sourceColumnId,
+          to: variables.newColumnId,
+          taskId: variables.taskId
+        });
+        
+        // Invalidate kanban data
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban(selectedProjectId) });
+        
+        // Check if task was moved to a completed column and invalidate user points
+        const kanbanData = queryClient.getQueryData(QUERY_KEYS.kanban(selectedProjectId)) as any;
+        const columns = kanbanData?.columns || [];
+        const targetColumn = columns.find((col: any) => col.id === variables.newColumnId);
+        
+        if (targetColumn) {
+          const isCompletedColumn = targetColumn.title.toLowerCase().includes('done') || 
+                                  targetColumn.title.toLowerCase().includes('concluído') || 
+                                  targetColumn.title.toLowerCase().includes('concluido') || 
+                                  targetColumn.title.toLowerCase().includes('completed');
+          
+          if (isCompletedColumn) {
+            logger.info('Task moved to completed column - invalidating user points cache');
+            // Invalidate user points cache for real-time celebration updates
+            queryClient.invalidateQueries({ queryKey: ['userPoints'] });
+            // Invalidate projects summary for real-time dashboard updates
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projectsSummary });
+          }
+        }
+      } else if (!error) {
+        logger.info('Task repositioned within same column - skipping cache invalidation', {
+          column: variables.sourceColumnId,
+          taskId: variables.taskId
+        });
+      }
     }
   });
 
@@ -215,7 +234,7 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
         -1
       );
 
-      const newTaskData: Omit<Task, 'id' | 'created_at' | 'updated_at'> = {
+      const newTaskData = {
         title: taskData.title || 'Nova Tarefa',
         description: taskData.description || null,
         column_id: columnId,
@@ -225,7 +244,6 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
         complexity: taskData.complexity || 'medium',
         project_id: projectId || null,
         status_image_filenames: ['tarefas.svg'],
-        estimated_hours: null,
       };
 
       const { data, error } = await supabase
@@ -236,21 +254,7 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
 
       if (error) throw error;
 
-      // Log activity
-      await logActivity(
-        'task',
-        data.id,
-        'create',
-        null,
-        { 
-          title: data.title, 
-          column_id: data.column_id,
-          project_id: data.project_id 
-        },
-        { 
-          project_id: data.project_id
-        }
-      );
+      // Activity logging removed
 
       return data as Task;
     },
@@ -264,12 +268,15 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
           tasks: [...(oldData.tasks || []), newTask]
         };
       });
+      
+      // Invalidate projects summary for new task with FP
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projectsSummary });
     },
     onError: (error) => {
       logger.error('Create task error', error);
-    },
-    onSettled: () => {
-      invalidateRelatedQueries(queryClient, 'task', selectedProjectId);
+      // Only invalidate on error to revert optimistic updates
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban(selectedProjectId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projectsSummary });
     }
   });
 
@@ -299,7 +306,7 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
         }
       });
 
-      // Get current task for activity logging
+      // Get current task
       const kanbanData = queryClient.getQueryData(QUERY_KEYS.kanban(selectedProjectId)) as any;
       const originalTask = kanbanData?.tasks?.find((t: Task) => t.id === taskId);
       
@@ -333,16 +340,12 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
 
       if (fetchError) throw fetchError;
 
-      // Log activity
-      await logActivity('task', taskId, 'update', originalTask, freshTask, {
-        project_id: originalTask.project_id,
-        column_id: originalTask.column_id
-      });
+      // Activity logging removed
 
       return freshTask as Task;
     },
     onSuccess: (updatedTask) => {
-      // Update cache
+      // Update cache optimistically
       const kanbanKey = QUERY_KEYS.kanban(selectedProjectId);
       queryClient.setQueryData(kanbanKey, (oldData: any) => {
         if (!oldData?.tasks) return oldData;
@@ -353,12 +356,19 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
           )
         };
       });
+      
+      // Invalidate projects summary for FP updates and other changes
+      logger.info('Task updated - invalidating projectsSummary cache', { 
+        taskId: updatedTask.id, 
+        functionPoints: updatedTask.function_points 
+      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projectsSummary });
     },
     onError: (error) => {
       logger.error('Update task error', error);
-    },
-    onSettled: () => {
-      invalidateRelatedQueries(queryClient, 'task', selectedProjectId);
+      // Only invalidate on error to revert optimistic updates
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban(selectedProjectId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projectsSummary });
     }
   });
 
@@ -380,16 +390,12 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
 
       if (error) throw error;
 
-      // Log activity
-      await logActivity('task', taskId, 'delete', taskToDelete, null, {
-        project_id: taskToDelete.project_id,
-        column_id: taskToDelete.column_id
-      });
+      // Activity logging removed
 
       return { taskId, deletedTask: taskToDelete };
     },
     onSuccess: ({ taskId }) => {
-      // Remove from cache
+      // Remove from cache optimistically
       const kanbanKey = QUERY_KEYS.kanban(selectedProjectId);
       queryClient.setQueryData(kanbanKey, (oldData: any) => {
         if (!oldData?.tasks) return oldData;
@@ -398,18 +404,31 @@ export const useOptimizedKanbanMutations = (selectedProjectId?: string | null) =
           tasks: oldData.tasks.filter((task: Task) => task.id !== taskId)
         };
       });
+      
+      // Invalidate projects summary for deleted task with FP
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projectsSummary });
     },
     onError: (error) => {
       logger.error('Delete task error', error);
-    },
-    onSettled: () => {
-      invalidateRelatedQueries(queryClient, 'task', selectedProjectId);
+      // Only invalidate on error to revert optimistic updates
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban(selectedProjectId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projectsSummary });
     }
   });
 
+  // Wrapper function to match the expected signature from KanbanBoard
+  const moveTask = (taskId: string, sourceColumnId: string, newColumnId: string, newPosition?: number) => {
+    moveTaskMutation.mutate({
+      taskId,
+      sourceColumnId,
+      newColumnId,
+      newPosition
+    });
+  };
+
   return {
-    moveTask: moveTaskMutation.mutate,
-    createTask: createTaskMutation.mutate,
+    moveTask,
+    createTask: createTaskMutation.mutateAsync,
     updateTask: updateTaskMutation.mutate,
     deleteTask: deleteTaskMutation.mutate,
     isMoving: moveTaskMutation.isPending,

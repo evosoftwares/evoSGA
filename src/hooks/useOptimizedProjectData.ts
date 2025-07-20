@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Project } from '@/types/database';
 import { QUERY_KEYS, invalidateRelatedQueries } from '@/lib/queryClient';
 import { createLogger } from '@/utils/logger';
+import { useProjectsRealTime } from './useProjectsRealTime';
 
 const logger = createLogger('useOptimizedProjectData');
 
@@ -26,13 +27,16 @@ const fetchProjects = async (): Promise<Project[]> => {
 
 export const useOptimizedProjectData = () => {
   const queryClient = useQueryClient();
+  
+  // Set up real-time subscriptions for projects
+  useProjectsRealTime();
 
   // Query for fetching projects
   const {
     data: projects = [],
     isLoading: loading,
     error,
-    refetch: fetchProjects
+    refetch: refetchProjects
   } = useQuery({
     queryKey: QUERY_KEYS.projects,
     queryFn: fetchProjects,
@@ -42,25 +46,8 @@ export const useOptimizedProjectData = () => {
     refetchOnMount: false, // Use cache if available
   });
 
-  // Real-time subscription using React Query's built-in refetch
-  // This is more efficient than individual subscriptions
-  React.useEffect(() => {
-    const channelName = `optimized-projects-${Math.random().toString(36).substr(2, 9)}`;
-    
-    const channel = supabase
-      .channel(channelName)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'projects' 
-      }, () => {
-        // Instead of manual fetch, invalidate React Query cache
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects });
-      })
-      .subscribe();
-    
-    return () => channel.unsubscribe();
-  }, [queryClient]);
+  // Real-time subscriptions are handled by useProjectsRealTime hook
+  // This prevents duplicate subscriptions and uses the centralized RealtimeManager
 
   // Create project mutation
   const createProjectMutation = useMutation({
@@ -148,7 +135,7 @@ export const useOptimizedProjectData = () => {
     projects,
     loading,
     error: error?.message || null,
-    fetchProjects,
+    fetchProjects: refetchProjects,
     createProject: createProjectMutation.mutate,
     updateProject: (id: string, updates: Partial<Project>) => 
       updateProjectMutation.mutate({ id, updates }),

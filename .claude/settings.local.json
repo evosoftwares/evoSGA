@@ -27,7 +27,15 @@
       "Bash(mv:*)",
       "Bash(find:*)",
       "Bash(touch:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(timeout 10s npm run dev)",
+      "Bash(mkdir:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run lint:*)",
+      "Bash(ls:*)",
+      "Bash(psql:*)",
+      "WebFetch(domain:dgkcpzvcotwmfcmhtrjh.supabase.co)",
+      "Bash(open http://localhost:8082/arquivos)"
     ],
     "deny": []
   }

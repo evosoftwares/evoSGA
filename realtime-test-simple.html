@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste Real-time Simplificado</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Teste Real-time Simplificado</h1>
+    <div id="status"></div>
+    <div id="log"></div>
+    
+    <script>
+        const { createClient } = supabase;
+        const client = createClient(
+            'https://dgkcpzvcotwmfcmhtrjh.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRna2NwenZjb3R3bWZjbWh0cmpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5MTAwNDIsImV4cCI6MjA2NTQ4NjA0Mn0.bIZV7YOYwTtw3rwNlOX8MCei9hmUb3LK62gEVndLhwc'
+        );
+        
+        function log(msg) {
+            const div = document.getElementById('log');
+            div.innerHTML += `<p>${new Date().toLocaleTimeString()}: ${msg}</p>`;
+            console.log(msg);
+        }
+        
+        log('Iniciando teste...');
+        
+        // Teste básico de connection
+        client.auth.getSession().then(({ data }) => {
+            log('Session status: ' + (data.session ? 'authenticated' : 'anonymous'));
+        });
+        
+        // Teste de subscription simples
+        const channel = client
+            .channel('test-channel')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'tasks' 
+            }, (payload) => {
+                log('EVENTO REAL-TIME RECEBIDO!');
+                log('Payload: ' + JSON.stringify(payload, null, 2));
+            })
+            .subscribe((status) => {
+                log('Status da subscription: ' + status);
+                document.getElementById('status').innerHTML = `Status: ${status}`;
+                
+                if (status === 'SUBSCRIBED') {
+                    log('✅ SUBSCRIPTION ATIVA! Agora faça uma mudança no banco.');
+                } else if (status === 'TIMED_OUT') {
+                    log('❌ TIMEOUT! Verifique se o realtime está habilitado.');
+                } else if (status === 'CLOSED') {
+                    log('❌ CONEXÃO FECHADA!');
+                }
+            });
+    </script>
+</body>
+</html>

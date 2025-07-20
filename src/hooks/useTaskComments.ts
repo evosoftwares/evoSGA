@@ -1,10 +1,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { TaskComment, Profile } from '@/types/database';
 import { createLogger } from '@/utils/logger';
+import { useCommentsRealTime } from './useCommentsRealTime';
 
 const logger = createLogger('useTaskComments');
 
@@ -14,6 +16,10 @@ export const useTaskComments = (taskId: string) => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  
+  // Set up real-time subscriptions for comments
+  useCommentsRealTime(taskId);
 
   const fetchComments = useCallback(async () => {
     if (!taskId) return;
@@ -84,6 +90,9 @@ export const useTaskComments = (taskId: string) => {
 
       setComments(prev => [...prev, data]);
 
+      // Invalidate comment counts cache
+      queryClient.invalidateQueries({ queryKey: ['task-comment-counts'] });
+
       toast({
         title: 'Sucesso',
         description: 'Comentário adicionado!',
@@ -112,6 +121,9 @@ export const useTaskComments = (taskId: string) => {
       if (error) throw error;
 
       setComments(prev => prev.filter(c => c.id !== commentId));
+
+      // Invalidate comment counts cache
+      queryClient.invalidateQueries({ queryKey: ['task-comment-counts'] });
 
       toast({
         title: 'Sucesso',

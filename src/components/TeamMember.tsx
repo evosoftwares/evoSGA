@@ -45,22 +45,24 @@ const TeamMember: React.FC<TeamMemberProps> = ({ member }) => {
           </div>
         </div>
         
-        <div className="flex items-center space-x-2 ml-2 shrink-0">
-            {/* Current task points */}
-            <div className="h-8 px-3 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="text-sm font-bold text-blue-600">{member.functionPoints}</span>
-            </div>
-            <span className="text-xs text-gray-500 font-medium">Atual</span>
-            
+        <div className="flex flex-col items-end space-y-2 ml-2 shrink-0">
             {/* Earned points (if available) */}
             {member.earnedPoints !== undefined && (
-              <>
-                <div className="h-8 px-3 bg-green-100 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-bold text-green-600">{member.earnedPoints}</span>
-                </div>
+              <div className="flex items-center space-x-2">
                 <span className="text-xs text-gray-500 font-medium">Total</span>
-              </>
+                <div className="h-8 px-3 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-bold text-green-600">{member.earnedPoints}</span>
+                </div>
+              </div>
             )}
+            
+            {/* Current task points */}
+            <div className="flex items-center space-x-2">
+                <span className="text-xs text-gray-500 font-medium">Atual</span>
+                <div className="h-8 px-3 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-bold text-blue-600">{member.functionPoints}</span>
+                </div>
+            </div>
         </div>
       </div>
     </div>

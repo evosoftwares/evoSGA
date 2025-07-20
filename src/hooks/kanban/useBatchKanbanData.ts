@@ -100,10 +100,11 @@ export const useBatchKanbanData = (selectedProjectId?: string | null) => {
   return useQuery({
     queryKey: QUERY_KEYS.kanban(selectedProjectId),
     queryFn: () => fetchBatchKanbanData(selectedProjectId),
-    staleTime: 30 * 1000, // 30 seconds para dados do kanban
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 2 * 60 * 1000, // 2 minutes - increased to reduce unnecessary refetches
+    gcTime: 10 * 60 * 1000, // 10 minutes - increased garbage collection time
     refetchOnWindowFocus: false,
-    refetchOnMount: true, // Sempre refetch ao montar (dados críticos)
+    refetchOnMount: false, // Only refetch if data is stale - improved caching
+    refetchOnReconnect: 'always', // Always refetch on reconnect for data consistency
     // Só refetch se o projectId mudou
     enabled: true,
   });

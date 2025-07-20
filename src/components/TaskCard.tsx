@@ -1,10 +1,8 @@
 
 import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
-import { Clock, User, MessageCircle, Tag } from 'lucide-react';
 import { Task, TeamMember, Project, Tag as TagType } from '@/types/database';
 import { Badge } from '@/components/ui/badge';
-import { ProjectBadge } from '@/components/projects/ProjectBadge';
 
 interface TaskCardProps {
   task: Task;
@@ -15,6 +13,7 @@ interface TaskCardProps {
   tags: TagType[];
   taskTags: { task_id: string; tag_id: string }[];
   columns: { id: string; title: string }[];
+  commentCounts: Record<string, number>;
 }
 
 const TaskCard: React.FC<TaskCardProps> = ({ 
@@ -25,7 +24,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
   projects, 
   tags, 
   taskTags,
-  columns 
+  columns,
+  commentCounts
 }) => {
   // Encontrar o nome do responsável
   const assignee = teamMembers.find(member => member.id === task.assignee);
@@ -45,6 +45,9 @@ const TaskCard: React.FC<TaskCardProps> = ({
                      currentColumn?.title?.toLowerCase().includes('completed') ||
                      currentColumn?.title?.toLowerCase().includes('done');
 
+  // Get comment count for this task
+  const commentCount = commentCounts[task.id] || 0;
+
   return (
     <Draggable draggableId={task.id} index={index} isDragDisabled={isCompleted}>
       {(provided, snapshot) => (
@@ -52,131 +55,102 @@ const TaskCard: React.FC<TaskCardProps> = ({
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          className={`bg-white rounded-lg lg:rounded-xl shadow-sm border border-gray-200 p-3 lg:p-4 mb-2 lg:mb-3 cursor-pointer hover:border-blue-300 ${
-            snapshot.isDragging ? 'rotate-2 shadow-lg' : ''
-          } ${isCompleted ? 'opacity-75' : ''}`}
+          className={`bg-white rounded-lg border border-gray-200 p-3 mb-2 cursor-pointer 
+            transition-all duration-150
+            hover:border-gray-300 hover:shadow-sm
+            ${snapshot.isDragging ? 'shadow-lg scale-105' : ''} 
+            ${isCompleted ? 'opacity-60 bg-gray-50' : ''}`}
           onClick={onClick}
         >
-          <div className="space-y-2 lg:space-y-3">
-            {/* Header: Título e Projeto */}
-            <div className="space-y-1.5 lg:space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className={`font-semibold text-xs lg:text-sm leading-tight line-clamp-2 flex-1 ${
-                  isCompleted ? 'text-gray-600' : 'text-gray-900'
-                }`}>
-                  {task.title}
-                </h3>
-                {/* Complexidade no canto superior direito */}
-                {task.complexity && (
-                  <Badge 
-                    variant="outline" 
-                    className={`text-xs px-1 lg:px-1.5 py-0.5 h-4 lg:h-5 shrink-0 ${
-                      task.complexity === 'low' ? 'border-green-300 text-green-700 bg-green-50' :
-                      task.complexity === 'medium' ? 'border-yellow-300 text-yellow-700 bg-yellow-50' :
-                      task.complexity === 'high' ? 'border-red-300 text-red-700 bg-red-50' :
-                      'border-gray-300 text-gray-700 bg-gray-50'
-                    }`}
-                  >
-                    {task.complexity === 'low' ? 'B' :
-                     task.complexity === 'medium' ? 'M' :
-                     task.complexity === 'high' ? 'A' : 
-                     task.complexity}
-                  </Badge>
-                )}
-              </div>
-              
-              {project && (
-                <ProjectBadge project={project} size="sm" />
+          {/* Header com título, complexidade e pontos */}
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-start gap-2 flex-1">
+              <h3 className={`text-sm font-medium ${
+                isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'
+              }`}>
+                {task.title}
+              </h3>
+              {/* Bolinha da complexidade */}
+              {task.complexity && (
+                <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                  task.complexity === 'low' ? 'bg-green-500' :
+                  task.complexity === 'medium' ? 'bg-yellow-500' :
+                  task.complexity === 'high' ? 'bg-red-500' :
+                  'bg-gray-400'
+                }`} title={
+                  task.complexity === 'low' ? 'Baixa complexidade' :
+                  task.complexity === 'medium' ? 'Média complexidade' :
+                  task.complexity === 'high' ? 'Alta complexidade' :
+                  'Complexidade indefinida'
+                }></div>
               )}
             </div>
-
-
-            {/* Descrição */}
-            {task.description && (
-              <p className={`text-xs line-clamp-2 ${
-                isCompleted ? 'text-gray-500' : 'text-gray-600'
-              }`}>
-                {task.description}
-              </p>
-            )}
-
-            {/* Tags */}
-            {taskTagList.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {taskTagList.slice(0, 2).map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    variant="secondary"
-                    className="text-xs px-1.5 lg:px-2 py-0.5 h-4 lg:h-5"
-                    style={{ backgroundColor: tag.color + '20', color: tag.color }}
-                  >
-                    <Tag className="w-2 h-2 lg:w-2.5 lg:h-2.5 mr-1" />
-                    <span className="truncate max-w-16">{tag.name}</span>
-                  </Badge>
-                ))}
-                {taskTagList.length > 2 && (
-                  <Badge variant="outline" className="text-xs px-1.5 lg:px-2 py-0.5 h-4 lg:h-5">
-                    +{taskTagList.length - 2}
-                  </Badge>
-                )}
-              </div>
-            )}
-
-            {/* Footer: Métricas e Responsável */}
-            <div className="flex items-center justify-between pt-1">
-              {/* Métricas à esquerda */}
-              <div className={`flex items-center space-x-2 lg:space-x-3 text-xs ${
-                isCompleted ? 'text-gray-400' : 'text-gray-500'
-              }`}>
-                {/* Pontos de função */}
-                {task.function_points > 0 && (
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 lg:w-4 lg:h-4 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-blue-600 text-xs font-medium">
-                        {task.function_points}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Horas estimadas */}
-                {task.estimated_hours && (
-                  <div className="flex items-center gap-0.5 lg:gap-1">
-                    <Clock className="w-2.5 h-2.5 lg:w-3 lg:h-3" />
-                    <span>{task.estimated_hours}h</span>
-                  </div>
-                )}
-
-                {/* Comentários */}
-                <div className="flex items-center gap-0.5 lg:gap-1">
-                  <MessageCircle className="w-2.5 h-2.5 lg:w-3 lg:h-3" />
-                  <span>0</span>
-                </div>
-              </div>
-
-              {/* Responsável à direita */}
-              {assigneeName && (
-                <div className={`flex items-center gap-1 text-xs ${
-                  isCompleted ? 'text-gray-500' : 'text-gray-600'
-                }`}>
-                  <div className="w-4 h-4 lg:w-5 lg:h-5 bg-gray-200 rounded-full flex items-center justify-center">
-                    <User className="w-2.5 h-2.5 lg:w-3 lg:h-3" />
-                  </div>
-                  <span className="font-medium max-w-12 lg:max-w-16 truncate">{assigneeName}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Indicador visual de tarefa concluída */}
-            {isCompleted && (
-              <div className="flex items-center justify-center pt-1.5 lg:pt-2">
-                <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="font-medium">Concluída</span>
-                </div>
+            {/* Pill azul para pontos de função */}
+            {task.function_points > 0 && (
+              <div className="ml-2 bg-blue-100 text-blue-600 text-xs font-semibold px-2 py-1 rounded-full">
+                {task.function_points}
               </div>
             )}
           </div>
+
+          {/* Descrição resumida */}
+          {task.description && (
+            <p className={`text-xs mb-2 line-clamp-1 ${
+              isCompleted ? 'text-gray-400' : 'text-gray-600'
+            }`}>
+              {task.description}
+            </p>
+          )}
+
+          {/* Tags */}
+          {taskTagList.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {taskTagList.slice(0, 3).map((tag) => (
+                <Badge
+                  key={tag.id}
+                  variant="secondary"
+                  className="text-xs px-2 py-0.5 h-5 font-medium rounded-full"
+                  style={{ backgroundColor: tag.color + '15', color: tag.color }}
+                >
+                  {tag.name}
+                </Badge>
+              ))}
+              {taskTagList.length > 3 && (
+                <Badge variant="outline" className="text-xs px-2 py-0.5 h-5 rounded-full">
+                  ...
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {/* Footer com métricas e responsável */}
+          <div className="flex items-center justify-between text-xs text-gray-500">
+            <div className="flex items-center space-x-2">
+              {/* Horas */}
+              {task.estimated_hours && (
+                <span>{task.estimated_hours}h</span>
+              )}
+              
+              {/* Comentários */}
+              {commentCount > 0 && (
+                <span>{commentCount} 💬</span>
+              )}
+            </div>
+
+            {/* Responsável */}
+            {assigneeName && (
+              <span className="font-medium truncate max-w-20">
+                {assigneeName}
+              </span>
+            )}
+          </div>
+
+          {/* Status concluído */}
+          {isCompleted && (
+            <div className="mt-2 text-xs text-green-600 font-medium">
+              ✓ Concluída
+            </div>
+          )}
         </div>
       )}
     </Draggable>

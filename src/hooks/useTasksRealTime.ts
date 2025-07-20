@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/lib/queryClient';
+import { smartInvalidate } from '@/lib/smartCache';
 import { createLogger } from '@/utils/logger';
 import { realtimeManager } from '@/services/realtimeManager';
 import { cacheInvalidationManager } from '@/services/cacheInvalidationManager';
@@ -14,22 +15,14 @@ export const useTasksRealTime = (projectId?: string | null) => {
   const directChannelRef = useRef<any>(null);
 
   const handleInvalidation = useCallback((type: string) => {
-    // FORCE refetch without cache
-    console.log(`🔥 [FORCE-REFETCH] Forcing refetch for ${type} - NO CACHE`);
-    if (projectId) {
-      // Force refetch by setting stale and invalidating
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban(projectId) });
-      queryClient.refetchQueries({ queryKey: QUERY_KEYS.kanban(projectId) });
-      
-      if (type === 'tasks') {
-        queryClient.invalidateQueries({ queryKey: ['userPoints'] });
-        queryClient.invalidateQueries({ queryKey: ['projectsSummary'] });
-        queryClient.refetchQueries({ queryKey: ['userPoints'] });
-        queryClient.refetchQueries({ queryKey: ['projectsSummary'] });
-      }
-    } else {
-      queryClient.invalidateQueries({ queryKey: ['kanban'] });
-      queryClient.refetchQueries({ queryKey: ['kanban'] });
+    console.log(`🔥 [SMART-CACHE] Processing ${type} invalidation`);
+    
+    // Use smart cache invalidation
+    smartInvalidate(queryClient, 'kanban', projectId);
+    
+    // Only invalidate related queries for tasks
+    if (type === 'tasks') {
+      smartInvalidate(queryClient, 'userPoints');
     }
   }, [projectId, queryClient]);
 

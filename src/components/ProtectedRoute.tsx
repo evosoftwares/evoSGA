@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -10,6 +10,7 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [forceLoadingOff, setForceLoadingOff] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -17,7 +18,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     }
   }, [user, loading, navigate]);
 
-  if (loading) {
+  // Force loading off after timeout to prevent infinite loading
+  useEffect(() => {
+    if (loading) {
+      const timeout = setTimeout(() => {
+        console.warn('ProtectedRoute: Loading timeout - forcing off');
+        setForceLoadingOff(true);
+      }, 10000); // 10 second timeout
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [loading]);
+
+  if (loading && !forceLoadingOff) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex items-center gap-2">
@@ -26,6 +39,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         </div>
       </div>
     );
+  }
+
+  // If loading was forced off and no user, redirect to auth
+  if (forceLoadingOff && !user) {
+    navigate('/auth');
+    return null;
   }
 
   if (!user) {

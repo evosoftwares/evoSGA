@@ -1,17 +1,27 @@
 
 import { useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useActivityLogger } from '@/hooks/useActivityLogger';
 import { useAuth } from '@/contexts/AuthContext';
+import { QUERY_KEYS } from '@/lib/queryClient';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('TAG');
 
-export const useTagMutations = () => {
+export const useTagMutations = (projectId?: string | null) => {
   const { toast } = useToast();
-  const { logActivity } = useActivityLogger();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const invalidateTagsCache = useCallback(() => {
+    // Invalidate all queries that depend on tags
+    queryClient.invalidateQueries({ queryKey: ['tags'] });
+    queryClient.invalidateQueries({ queryKey: ['taskTags'] });
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.kanban(projectId) });
+    queryClient.invalidateQueries({ queryKey: ['kanban'] }); // Invalidate all kanban queries
+    queryClient.invalidateQueries({ queryKey: ['referenceData'] });
+  }, [queryClient, projectId]);
 
   const createTag = useCallback(async (name: string, color: string) => {
     logger.info('Starting tag creation', { name, color, user: user?.id });
@@ -37,19 +47,16 @@ export const useTagMutations = () => {
 
       logger.info('Tag creation success', data);
 
-      try {
-        await logActivity('tag', data.id, 'create', null, data);
-        logger.debug('Activity logged successfully');
-      } catch (logError) {
-        logger.warn('Failed to log activity', logError);
-        // Continue execution even if logging fails
-      }
+      // Activity logging removed
 
       toast({
         title: 'Sucesso',
         description: 'Etiqueta criada com sucesso!',
         className: 'bg-green-50 border-green-200 text-green-900'
       });
+
+      // Real-time subscription will handle cache invalidation
+      // invalidateTagsCache(); // Removed to avoid duplicate fetches
 
       return data;
     } catch (error: any) {
@@ -61,7 +68,7 @@ export const useTagMutations = () => {
       });
       throw error;
     }
-  }, [user, toast, logActivity]);
+  }, [user, toast, invalidateTagsCache]);
 
   const updateTag = useCallback(async (tagId: string, name: string, color: string) => {
     logger.info('Starting tag update', { tagId, name, color, user: user?.id });
@@ -90,17 +97,16 @@ export const useTagMutations = () => {
 
       logger.info('Tag update success', data);
 
-      try {
-        await logActivity('tag', tagId, 'update', oldData, data);
-      } catch (logError) {
-        logger.warn('Failed to log activity', logError);
-      }
+      // Activity logging removed
 
       toast({
         title: 'Sucesso',
         description: 'Etiqueta atualizada com sucesso!',
         className: 'bg-blue-50 border-blue-200 text-blue-900'
       });
+
+      // Real-time subscription will handle cache invalidation
+      // invalidateTagsCache(); // Removed to avoid duplicate fetches
 
       return data;
     } catch (error: any) {
@@ -112,7 +118,7 @@ export const useTagMutations = () => {
       });
       throw error;
     }
-  }, [user, toast, logActivity]);
+  }, [user, toast, invalidateTagsCache]);
 
   const deleteTag = useCallback(async (tagId: string) => {
     if (!user) {
@@ -135,17 +141,16 @@ export const useTagMutations = () => {
 
       if (error) throw error;
 
-      try {
-        await logActivity('tag', tagId, 'delete', oldData, null);
-      } catch (logError) {
-        logger.warn('Failed to log activity', logError);
-      }
+      // Activity logging removed
 
       toast({
         title: 'Sucesso',
         description: 'Etiqueta removida com sucesso!',
         className: 'bg-red-50 border-red-200 text-red-900'
       });
+
+      // Real-time subscription will handle cache invalidation
+      // invalidateTagsCache(); // Removed to avoid duplicate fetches
     } catch (error: any) {
       logger.error('Tag delete error', error);
       toast({
@@ -155,7 +160,7 @@ export const useTagMutations = () => {
       });
       throw error;
     }
-  }, [user, toast, logActivity]);
+  }, [user, toast, invalidateTagsCache]);
 
   const addTagToTask = useCallback(async (taskId: string, tagId: string) => {
     logger.info('Starting add tag to task', { taskId, tagId, user: user?.id });
@@ -165,6 +170,18 @@ export const useTagMutations = () => {
       return;
     }
 
+    // Optimistic update - immediately update cache
+    const tempId = `temp-${Date.now()}`;
+    const optimisticData = { id: tempId, task_id: taskId, tag_id: tagId };
+    
+    queryClient.setQueryData(QUERY_KEYS.kanban(projectId), (oldData: any) => {
+      if (!oldData) return oldData;
+      return {
+        ...oldData,
+        taskTags: [...(oldData.taskTags || []), optimisticData]
+      };
+    });
+
     try {
       const { data, error } = await supabase
         .from('task_tags')
@@ -173,6 +190,15 @@ export const useTagMutations = () => {
         .single();
 
       if (error) {
+        // Revert optimistic update on error
+        queryClient.setQueryData(QUERY_KEYS.kanban(projectId), (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            taskTags: oldData.taskTags.filter((tt: any) => tt.id !== tempId)
+          };
+        });
+        
         // Check if it's a duplicate key error
         if (error.message?.includes('duplicate key') || error.code === '23505') {
           logger.debug('Tag already assigned, ignoring');
@@ -180,6 +206,15 @@ export const useTagMutations = () => {
         }
         throw error;
       }
+
+      // Replace optimistic data with real data
+      queryClient.setQueryData(QUERY_KEYS.kanban(projectId), (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          taskTags: oldData.taskTags.map((tt: any) => tt.id === tempId ? data : tt)
+        };
+      });
 
       logger.info('Add tag to task success', data);
       return data;
@@ -192,13 +227,24 @@ export const useTagMutations = () => {
       });
       throw error;
     }
-  }, [user, toast]);
+  }, [user, toast, invalidateTagsCache]);
 
   const removeTagFromTask = useCallback(async (taskId: string, tagId: string) => {
     if (!user) {
       toast({ title: 'Erro', description: 'Usuário não autenticado', variant: 'destructive' });
       return;
     }
+
+    // Optimistic update - immediately remove from cache
+    let removedItem: any = null;
+    queryClient.setQueryData(QUERY_KEYS.kanban(projectId), (oldData: any) => {
+      if (!oldData) return oldData;
+      removedItem = oldData.taskTags.find((tt: any) => tt.task_id === taskId && tt.tag_id === tagId);
+      return {
+        ...oldData,
+        taskTags: oldData.taskTags.filter((tt: any) => !(tt.task_id === taskId && tt.tag_id === tagId))
+      };
+    });
 
     try {
       const { error } = await supabase
@@ -207,7 +253,19 @@ export const useTagMutations = () => {
         .eq('task_id', taskId)
         .eq('tag_id', tagId);
 
-      if (error) throw error;
+      if (error) {
+        // Revert optimistic update on error
+        if (removedItem) {
+          queryClient.setQueryData(QUERY_KEYS.kanban(projectId), (oldData: any) => {
+            if (!oldData) return oldData;
+            return {
+              ...oldData,
+              taskTags: [...(oldData.taskTags || []), removedItem]
+            };
+          });
+        }
+        throw error;
+      }
     } catch (error: any) {
       logger.error('Remove tag from task error', error);
       toast({
@@ -217,7 +275,7 @@ export const useTagMutations = () => {
       });
       throw error;
     }
-  }, [user, toast]);
+  }, [user, toast, invalidateTagsCache]);
 
   return {
     createTag,

@@ -63,6 +63,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   refreshData
 }) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { 
     isSecurityAlertOpen, 
     showSecurityAlert, 
@@ -82,7 +83,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     deleteTag,
     addTagToTask,
     removeTagFromTask
-  } = useTagMutations();
+  } = useTagMutations(task?.project_id);
   
   const form = useForm<z.infer<typeof taskFormSchema>>({
     resolver: zodResolver(taskFormSchema),
@@ -139,23 +140,23 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         return;
       }
       await createTag(name, color);
-      refreshData();
+      // Removed manual refreshData() - React Query will handle cache updates
     },
     updateTag: async (tagId: string, name: string, color: string) => {
       await updateTag(tagId, name, color);
-      refreshData();
+      // Removed manual refreshData() - React Query will handle cache updates
     },
     deleteTag: async (tagId: string) => {
       await deleteTag(tagId);
-      refreshData();
+      // Removed manual refreshData() - React Query will handle cache updates
     },
     addTagToTask: async (taskId: string, tagId: string) => {
       await addTagToTask(taskId, tagId);
-      refreshData();
+      // Removed manual refreshData() - React Query will handle cache updates
     },
     removeTagFromTask: async (taskId: string, tagId: string) => {
       await removeTagFromTask(taskId, tagId);
-      refreshData();
+      // Removed manual refreshData() - React Query will handle cache updates
     }
   };
 
@@ -163,7 +164,6 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     logger.info('🔄 onSubmit called with values:', values);
     
     // Debug do user context
-    const { user } = useAuth();
     logger.info('📊 User context state:', { 
       user: user ? { id: user.id, email: user.email } : null,
       hasUser: !!user,
@@ -229,8 +229,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           });
         }
         
-        logger.info('🔄 Refreshing data...');
-        refreshData();
+        // Removed manual refreshData() - React Query mutations will handle cache updates
+        logger.info('🔄 Task operation completed, cache updated by React Query');
         
         // Close modal immediately after successful operation
         logger.info('🚪 Fechando modal...');

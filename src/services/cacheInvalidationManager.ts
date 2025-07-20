@@ -94,18 +94,18 @@ class CacheInvalidationManager {
       if (types.some(t => ['tasks', 'task_tags'].includes(t))) {
         console.log(`🔥 [CACHE-INVALIDATION] Invalidating userPoints and projectsSummary`);
         this.queryClient!.invalidateQueries({ queryKey: ['userPoints'] });
-        this.queryClient!.invalidateQueries({ queryKey: ['projectsSummary'] });
+        this.queryClient!.invalidateQueries({ queryKey: QUERY_KEYS.projectsSummary });
       }
       
       if (types.includes('tags')) {
         console.log(`🔥 [CACHE-INVALIDATION] Invalidating tags`);
-        this.queryClient!.invalidateQueries({ queryKey: ['tags'] });
+        this.queryClient!.invalidateQueries({ queryKey: QUERY_KEYS.tags });
       }
       
       if (types.includes('projects')) {
         console.log(`🔥 [CACHE-INVALIDATION] Invalidating projects`);
-        this.queryClient!.invalidateQueries({ queryKey: ['projects'] });
-        this.queryClient!.invalidateQueries({ queryKey: ['projectsSummary'] });
+        this.queryClient!.invalidateQueries({ queryKey: QUERY_KEYS.projects });
+        this.queryClient!.invalidateQueries({ queryKey: QUERY_KEYS.projectsSummary });
       }
     });
   }

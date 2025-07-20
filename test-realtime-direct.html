@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct Realtime Test</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Direct Realtime Test</h1>
+    <div id="status">Disconnected</div>
+    <div id="events"></div>
+    
+    <script>
+        const { createClient } = supabase;
+        const supabaseUrl = 'https://dgkcpzvcotwmfcmhtrjh.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRna2NwenZjb3R3bWZjbWh0cmpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5MTAwNDIsImV4cCI6MjA2NTQ4NjA0Mn0.bIZV7YOYwTtw3rwNlOX8MCei9hmUb3LK62gEVndLhwc';
+        
+        const client = createClient(supabaseUrl, supabaseKey);
+        
+        console.log('Setting up direct realtime test...');
+        
+        const channel = client
+            .channel('test-channel')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'tasks'
+            }, (payload) => {
+                console.log('🔥 Direct realtime event:', payload);
+                document.getElementById('events').innerHTML += `<p>Event: ${JSON.stringify(payload)}</p>`;
+            })
+            .subscribe((status) => {
+                console.log('🔥 Channel status:', status);
+                document.getElementById('status').innerHTML = `Status: ${status}`;
+            });
+    </script>
+</body>
+</html>

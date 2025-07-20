@@ -61,27 +61,18 @@ export const useUserPoints = () => {
       setIsSystemAvailable(true);
       
       // Calculate points in real-time from current task state
-      // Get users from both profiles and team_members tables
+      // Get users from profiles table
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, name, email, avatar');
       
-      const { data: teamMembers, error: teamMembersError } = await supabase
-        .from('team_members')
-        .select('id, name, email, avatar');
-      
-      if (profilesError && teamMembersError) {
-        logger.error('Error fetching users', { profilesError, teamMembersError });
-        throw profilesError || teamMembersError;
+      if (profilesError) {
+        logger.error('Error fetching users', { profilesError });
+        throw profilesError;
       }
       
-      // Combine users from both tables, avoiding duplicates
-      const allUsers = [
-        ...(profiles || []),
-        ...(teamMembers || []).filter(tm => 
-          !(profiles || []).some(p => p.id === tm.id)
-        )
-      ];
+      // Use profiles as the user list
+      const allUsers = profiles || [];
       
       const userPointsCalculated = [];
       
@@ -175,23 +166,11 @@ export const useUserPoints = () => {
       if (!isSystemAvailable) return null;
       
       // Get user info
-      let user = null;
-      const { data: profile } = await supabase
+      const { data: user } = await supabase
         .from('profiles')
         .select('id, name, email, avatar')
         .eq('id', userId)
         .single();
-      
-      if (profile) {
-        user = profile;
-      } else {
-        const { data: teamMember } = await supabase
-          .from('team_members')
-          .select('id, name, email, avatar')
-          .eq('id', userId)
-          .single();
-        user = teamMember;
-      }
       
       if (!user) return null;
       
@@ -272,6 +251,29 @@ export const useUserPoints = () => {
     }
   };
 
+  const getTaskPointAward = async (taskId: string): Promise<PointAward | null> => {
+    try {
+      if (!isSystemAvailable) return null;
+      
+      const { data, error } = await supabase
+        .from('user_point_awards_detailed')
+        .select('*')
+        .eq('task_id', taskId)
+        .order('awarded_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        throw error;
+      }
+      
+      return data || null;
+    } catch (err: any) {
+      logger.error('Error fetching task point award', err);
+      return null;
+    }
+  };
+
   // Subscribe to real-time updates
   useEffect(() => {
     if (!isSystemAvailable) return;
@@ -304,9 +306,11 @@ export const useUserPoints = () => {
     };
   }, [isSystemAvailable]);
 
-  // Initial load
+  // Initial load and polling
   useEffect(() => {
-    fetchUserPoints();
+    fetchUserPoints(); // Initial fetch
+    const interval = setInterval(fetchUserPoints, 5000); // Poll every 5 seconds
+    return () => clearInterval(interval); // Cleanup on unmount
   }, []);
 
   return {
@@ -317,6 +321,7 @@ export const useUserPoints = () => {
     isSystemAvailable,
     refreshData: fetchUserPoints,
     getUserPoints,
-    getUserAwards
+    getUserAwards,
+    getTaskPointAward
   };
 };

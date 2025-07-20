@@ -15,6 +15,7 @@ interface KanbanColumnProps {
   projects: Project[];
   profiles: Profile[];
   columns: KanbanColumnType[];
+  commentCounts: Record<string, number>;
   onAddTask: (columnId: string, title: string) => void;
   onTaskClick: (task: Task) => void;
 }
@@ -29,6 +30,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
   projects,
   profiles,
   columns,
+  commentCounts,
   onAddTask,
   onTaskClick
 }) => {
@@ -222,6 +224,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
                                 taskTags={taskTags}
                                 projects={projects}
                                 columns={columns}
+                                commentCounts={commentCounts}
                                 onClick={() => onTaskClick(task)}
                                 teamMembers={profiles}
                               />
@@ -244,6 +247,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
                   taskTags={taskTags}
                   projects={projects}
                   columns={columns}
+                  commentCounts={commentCounts}
                   onClick={() => onTaskClick(task)}
                   teamMembers={profiles}
                 />

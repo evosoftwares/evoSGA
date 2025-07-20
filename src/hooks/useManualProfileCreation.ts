@@ -127,13 +127,25 @@ export const useManualProfileCreation = () => {
 
     logger.debug('Ensuring profile exists for user', user.id);
     
-    try {
-      const name = user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário';
-      return await createProfileIfNotExists(user.id, name, user.email);
-    } catch (err: any) {
-      logger.error('Error in ensureProfileExists', err);
-      return null;
-    }
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise<Profile | null>((resolve) => {
+      setTimeout(() => {
+        logger.warn('ensureProfileExists timeout - returning null');
+        resolve(null);
+      }, 8000); // 8 second timeout
+    });
+    
+    const profilePromise = (async () => {
+      try {
+        const name = user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário';
+        return await createProfileIfNotExists(user.id, name, user.email);
+      } catch (err: any) {
+        logger.error('Error in ensureProfileExists', err);
+        return null;
+      }
+    })();
+    
+    return Promise.race([profilePromise, timeoutPromise]);
   }, [createProfileIfNotExists]);
 
   return {

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Real-time Supabase</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Debug Real-time Supabase</h1>
+    
+    <div id="status"></div>
+    <div id="logs"></div>
+    
+    <script>
+        const SUPABASE_URL = "https://dgkcpzvcotwmfcmhtrjh.supabase.co";
+        const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRna2NwenZjb3R3bWZjbWh0cmpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5MTAwNDIsImV4cCI6MjA2NTQ4NjA0Mn0.bIZV7YOYwTtw3rwNlOX8MCei9hmUb3LK62gEVndLhwc";
+
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+            realtime: {
+                params: {
+                    eventsPerSecond: 10,
+                },
+            },
+        });
+
+        const statusDiv = document.getElementById('status');
+        const logsDiv = document.getElementById('logs');
+
+        function log(message) {
+            console.log(message);
+            const p = document.createElement('p');
+            p.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            logsDiv.appendChild(p);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        // Test basic connection
+        log('Iniciando teste de conexão...');
+        
+        // Test tasks subscription
+        const tasksChannel = supabaseClient
+            .channel('debug-tasks')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'tasks' 
+            }, (payload) => {
+                log('Tasks change detected: ' + JSON.stringify(payload));
+            })
+            .subscribe((status) => {
+                log('Tasks channel status: ' + status);
+                statusDiv.textContent = 'Tasks channel: ' + status;
+            });
+
+        // Test projects subscription
+        const projectsChannel = supabaseClient
+            .channel('debug-projects')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'projects' 
+            }, (payload) => {
+                log('Projects change detected: ' + JSON.stringify(payload));
+            })
+            .subscribe((status) => {
+                log('Projects channel status: ' + status);
+            });
+
+        // Test basic data fetch
+        async function testDataFetch() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('tasks')
+                    .select('*')
+                    .limit(1);
+                
+                if (error) {
+                    log('Error fetching data: ' + error.message);
+                } else {
+                    log('Data fetch successful: ' + data.length + ' records');
+                }
+            } catch (err) {
+                log('Exception during data fetch: ' + err.message);
+            }
+        }
+
+        testDataFetch();
+    </script>
+</body>
+</html>

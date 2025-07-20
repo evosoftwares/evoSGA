@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Task } from '@/types/database';
-import { useActivityLogger } from '@/hooks/useActivityLogger';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/utils/logger';
 
@@ -16,7 +15,6 @@ interface UseKanbanMutationsProps {
 const NO_PROJECT_VALUE = 'no-project-sentinel';
 
 export const useKanbanMutations = ({ tasks, setTasks, setError }: UseKanbanMutationsProps) => {
-  const { logActivity } = useActivityLogger();
   const { user } = useAuth();
   
   // Função auxiliar para calcular novas posições baseado no índice real
@@ -186,6 +184,8 @@ export const useKanbanMutations = ({ tasks, setTasks, setError }: UseKanbanMutat
       logger.debug('No updates needed');
       return;
     }
+    
+    logger.info('Calculated updates for task movement', { updates, totalUpdates: updates.length });
 
     const originalTasks = tasks;
 
@@ -193,115 +193,41 @@ export const useKanbanMutations = ({ tasks, setTasks, setError }: UseKanbanMutat
     setTasks(currentTasks => applyLocalChanges(currentTasks, updates));
 
     try {
-      // 2. Usar stored procedure através de query SQL direta (try with points system first, fallback to basic, then direct updates)
-      let fallbackNeeded = false;
+      // 2. Use direct database updates for reliability (skip RPC functions)
+      logger.info('Using direct database updates for task positioning');
       
-      try {
-        const { error } = await supabase.rpc(
-          'update_task_with_time_tracking_and_points' as any,
-          {
-            p_task_id: taskId,
-            p_updates: updates,
-            p_column_changed: taskToMove.column_id !== newColumnId
-          }
-        );
+      for (const update of updates) {
+        const updateData: any = {
+          column_id: update.column_id,
+          position: update.position
+        };
         
-        if (error) {
-          logger.warn('Points system function failed, trying basic function', error);
-          fallbackNeeded = true;
+        // Add timestamp update if this is the moved task and column changed
+        if (update.id === taskId && taskToMove.column_id !== newColumnId) {
+          updateData.current_status_start_time = new Date().toISOString();
         }
-      } catch (pointsError) {
-        logger.warn('Points system function not available, falling back to basic function', pointsError);
-        fallbackNeeded = true;
+        
+        const { error: directError } = await supabase
+          .from('tasks')
+          .update(updateData)
+          .eq('id', update.id);
+          
+        if (directError) {
+          logger.error('Direct update failed for task', update.id, directError);
+          throw directError;
+        }
+        
+        logger.debug('Successfully updated task', { id: update.id, column_id: update.column_id, position: update.position });
       }
       
-      if (fallbackNeeded) {
-        try {
-          const { error } = await supabase.rpc(
-            'update_task_with_time_tracking',
-            {
-              p_task_id: taskId,
-              p_updates: updates,
-              p_column_changed: taskToMove.column_id !== newColumnId
-            }
-          );
-          
-          if (error) {
-            logger.warn('Basic function failed, falling back to direct updates', error);
-            // Fallback to direct database updates
-            for (const update of updates) {
-              const updateData: any = {
-                column_id: update.column_id,
-                position: update.position
-              };
-              
-              // Add timestamp update if this is the moved task and column changed
-              if (update.id === taskId && taskToMove.column_id !== newColumnId) {
-                updateData.current_status_start_time = new Date().toISOString();
-              }
-              
-              const { error: directError } = await supabase
-                .from('tasks')
-                .update(updateData)
-                .eq('id', update.id);
-                
-              if (directError) {
-                throw directError;
-              }
-            }
-          }
-        } catch (basicError) {
-          logger.error('Basic function failed, using direct updates', basicError);
-          // Fallback to direct database updates
-          for (const update of updates) {
-            const updateData: any = {
-              column_id: update.column_id,
-              position: update.position
-            };
-            
-            // Add timestamp update if this is the moved task and column changed
-            if (update.id === taskId && taskToMove.column_id !== newColumnId) {
-              updateData.current_status_start_time = new Date().toISOString();
-            }
-            
-            const { error: directError } = await supabase
-              .from('tasks')
-              .update(updateData)
-              .eq('id', update.id);
-              
-            if (directError) {
-              throw directError;
-            }
-          }
-        }
-      }
+      logger.info('All task updates completed successfully');
 
-      // 3. Log da atividade apenas se houve mudança de coluna
-      if (taskToMove.column_id !== newColumnId) {
-        logger.debug('Logging activity for column change');
-        await logActivity(
-          'task',
-          taskId,
-          'move',
-          { 
-            column_id: taskToMove.column_id, 
-            position: taskToMove.position,
-            title: taskToMove.title 
-          },
-          { 
-            column_id: newColumnId, 
-            position: newPosition,
-            title: taskToMove.title 
-          },
-          { 
-            from_column: taskToMove.column_id,
-            to_column: newColumnId,
-            project_id: taskToMove.project_id
-          }
-        );
-      }
+      // Activity logging removed
 
       logger.info('Database sync completed successfully');
+      
+      // Force refresh the data to ensure UI is in sync
+      // Note: This will be handled by the cache invalidation system
 
     } catch (err: any) {
       logger.error('Error syncing with database', err);
@@ -321,7 +247,7 @@ export const useKanbanMutations = ({ tasks, setTasks, setError }: UseKanbanMutat
         setError(`Erro ao mover tarefa: ${errorMessage}`);
       }
     }
-  }, [tasks, setTasks, setError, logActivity]);
+  }, [tasks, setTasks, setError, user]);
 
   const createTask = useCallback(async (taskData: Partial<Task>, columnId: string) => {
     logger.info('Starting task creation', { taskData, columnId, user: !!user });
@@ -368,28 +294,13 @@ export const useKanbanMutations = ({ tasks, setTasks, setError }: UseKanbanMutat
 
       setTasks(currentTasks => [...currentTasks, data as Task]);
 
-      await logActivity(
-        'task',
-        data.id,
-        'create',
-        null,
-        { 
-          title: data.title, 
-          column_id: data.column_id,
-          project_id: data.project_id 
-        },
-        { 
-          project_id: data.project_id
-        }
-      );
-
-      logger.debug('Activity logged');
+      // Activity logging removed
 
     } catch (err: any) {
       logger.error('Error creating task', err);
       setError(`Erro ao criar tarefa: ${err.message}`);
     }
-  }, [tasks, setTasks, setError, user, logActivity]);
+  }, [tasks, setTasks, setError, user]);
 
   const updateTask = useCallback(async (taskId: string, updates: Partial<Omit<Task, 'id'>>) => {
     if (!user) {
@@ -534,17 +445,7 @@ export const useKanbanMutations = ({ tasks, setTasks, setError }: UseKanbanMutat
         currentTasks.map(task => (task.id === taskId ? freshTask as Task : task))
       );
 
-      // Log da atividade
-      try {
-        await logActivity('task', taskId, 'update', originalTask, freshTask, {
-          project_id: originalTask.project_id,
-          column_id: originalTask.column_id
-        });
-        logger.debug('Activity logged successfully');
-      } catch (logError) {
-        logger.warn('Failed to log activity', logError);
-        // Não falhar a atualização por causa do log
-      }
+      // Activity logging removed
 
     } catch (err: any) {
       logger.error('Error updating task', err);
@@ -552,7 +453,7 @@ export const useKanbanMutations = ({ tasks, setTasks, setError }: UseKanbanMutat
       setTasks(originalTasks); // Reverter mudanças otimistas
       throw err;
     }
-  }, [tasks, setTasks, setError, logActivity, user]);
+  }, [tasks, setTasks, setError, user]);
 
   const deleteTask = useCallback(async (taskId: string) => {
     if (!user) {
@@ -587,17 +488,7 @@ export const useKanbanMutations = ({ tasks, setTasks, setError }: UseKanbanMutat
 
       logger.info('Task deleted successfully');
 
-      // Log da atividade
-      try {
-        await logActivity('task', taskId, 'delete', taskToDelete, null, {
-          project_id: taskToDelete.project_id,
-          column_id: taskToDelete.column_id
-        });
-        logger.debug('Activity logged successfully');
-      } catch (logError) {
-        logger.warn('Failed to log activity', logError);
-        // Não falhar a exclusão por causa do log
-      }
+      // Activity logging removed
 
     } catch (err: any) {
       logger.error('Error deleting task', err);
@@ -605,7 +496,7 @@ export const useKanbanMutations = ({ tasks, setTasks, setError }: UseKanbanMutat
       setTasks(originalTasks); // Reverter mudanças otimistas
       throw err;
     }
-  }, [tasks, setTasks, setError, logActivity, user]);
+  }, [tasks, setTasks, setError, user]);
 
   const fixAllPositions = useCallback(async () => {
     try {

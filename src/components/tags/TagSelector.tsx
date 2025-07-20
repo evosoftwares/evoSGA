@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Tag as TagType, TaskTag } from '@/types/database';
 import { TagItem } from './TagItem';
 import { createLogger } from '@/utils/logger';
@@ -55,10 +55,16 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
     return saved ? JSON.parse(saved) : [];
   });
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   // Get current task tags
-  const currentTaskTagIds = taskTags
-    .filter(tt => tt.task_id === taskId)
-    .map(tt => tt.tag_id);
+  const currentTaskTagIds = useMemo(() => {
+    const result = taskTags
+      .filter(tt => tt.task_id === taskId)
+      .map(tt => tt.tag_id);
+    logger.debug('Current task tag IDs updated', { taskId, result });
+    return result;
+  }, [taskTags, taskId]);
 
   // Filter and sort tags
   const { availableTags, recentAvailableTags } = useMemo(() => {
@@ -78,16 +84,21 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
   const handleToggleTag = async (tagId: string) => {
     const isSelected = currentTaskTagIds.includes(tagId);
     
+    logger.info('Toggling tag', { taskId, tagId, isSelected });
+    
     try {
       if (isSelected) {
+        logger.debug('Removing tag from task');
         await onRemoveTagFromTask(taskId, tagId);
       } else {
+        logger.debug('Adding tag to task');
         await onAddTagToTask(taskId, tagId);
         // Add to recent tags
         const updatedRecent = [tagId, ...recentTags.filter(id => id !== tagId)].slice(0, 5);
         setRecentTags(updatedRecent);
         localStorage.setItem('recentTags', JSON.stringify(updatedRecent));
       }
+      logger.info('Tag toggle successful');
     } catch (error) {
       logger.error('Error toggling tag', error);
     }
@@ -155,7 +166,17 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
           </div>
         </div>
 
-        <div className="max-h-80 overflow-y-auto">
+        <div 
+          ref={scrollContainerRef}
+          className="max-h-64 overflow-y-scroll"
+          style={{ 
+            scrollbarWidth: 'thin',
+            msOverflowStyle: 'scrollbar',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarColor: '#cbd5e1 transparent',
+            overflowY: 'scroll'
+          }}
+        >
           {/* Recent Tags */}
           {recentAvailableTags.length > 0 && (
             <div className="p-4 border-b border-gray-50">

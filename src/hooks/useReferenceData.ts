@@ -35,14 +35,12 @@ export const useReferenceData = () => {
         // Buscar todos os dados em paralelo
         const [
           profilesResult,
-          teamMembersResult,
           tasksResult,
           projectsResult,
           columnsResult,
           tagsResult
         ] = await Promise.all([
           supabase.from('profiles').select('id, name, email'),
-          supabase.from('team_members').select('id, name, email'),
           supabase.from('tasks').select('id, title'),
           supabase.from('projects').select('id, name'),
           supabase.from('kanban_columns').select('id, title'),
@@ -52,7 +50,6 @@ export const useReferenceData = () => {
         // Verificar erros
         const errors = [
           profilesResult.error,
-          teamMembersResult.error, 
           tasksResult.error,
           projectsResult.error,
           columnsResult.error,
@@ -70,16 +67,9 @@ export const useReferenceData = () => {
           return acc;
         }, {} as Record<string, string>);
 
-        // Adicionar team_members ao mapa de profiles também
-        (teamMembersResult.data || []).forEach(member => {
-          if (!profilesMap[member.id]) {
-            profilesMap[member.id] = member.name || member.email || 'Membro';
-          }
-        });
-
         const newReferenceData: ReferenceData = {
           profiles: profilesMap,
-          teamMembers: teamMembersResult.data || [],
+          teamMembers: [],
           tasks: tasksResult.data || [],
           projects: projectsResult.data || [],
           columns: columnsResult.data || [],

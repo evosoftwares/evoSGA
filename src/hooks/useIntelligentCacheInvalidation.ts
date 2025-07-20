@@ -12,24 +12,25 @@ interface InvalidationRule {
 }
 
 const INVALIDATION_RULES: InvalidationRule[] = [
-  // Task mutations affect kanban and activity data
-  {
-    trigger: 'task:create',
-    invalidate: ['kanban', 'activityHistory'],
-  },
-  {
-    trigger: 'task:update',
-    invalidate: ['kanban', 'activityHistory'],
-    condition: (data) => data?.significantChange === true
-  },
-  {
-    trigger: 'task:move',
-    invalidate: ['kanban', 'activityHistory'],
-  },
-  {
-    trigger: 'task:delete',
-    invalidate: ['kanban', 'activityHistory'],
-  },
+  // Disabled automatic invalidation to prevent infinite loops
+  // Task mutations affect kanban data
+  // {
+  //   trigger: 'task:create',
+  //   invalidate: ['kanban'],
+  // },
+  // {
+  //   trigger: 'task:update',
+  //   invalidate: ['kanban'],
+  //   condition: (data) => data?.significantChange === true
+  // },
+  // {
+  //   trigger: 'task:move',
+  //   invalidate: ['kanban'],
+  // },
+  // {
+  //   trigger: 'task:delete',
+  //   invalidate: ['kanban'],
+  // },
   
   // Project mutations affect projects and kanban data
   {
@@ -117,10 +118,6 @@ export const useIntelligentCacheInvalidation = () => {
           case 'taskTags':
             return queryClient.invalidateQueries({ 
               queryKey: QUERY_KEYS.taskTags 
-            });
-          case 'activityHistory':
-            return queryClient.invalidateQueries({ 
-              queryKey: QUERY_KEYS.activityHistory() 
             });
           default:
             logger.warn(`Unknown cache type: ${cacheType}`);

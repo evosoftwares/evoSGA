@@ -10,7 +10,8 @@ import { queryClient } from "@/lib/queryClient";
 import AuthPage from "./pages/AuthPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Index from "./pages/Index";
-import ActivityHistoryPage from "./pages/ActivityHistoryPage";
+import FilesPage from "./pages/FilesPage";
+import SalesPage from "./pages/SalesPage";
 import NotFound from "./pages/NotFound";
 
 const App = () => (
@@ -28,9 +29,14 @@ const App = () => (
                   <Index />
                 </ProtectedRoute>
               } />
-              <Route path="/activity-history" element={
+              <Route path="/arquivos" element={
                 <ProtectedRoute>
-                  <ActivityHistoryPage />
+                  <FilesPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/vendas" element={
+                <ProtectedRoute>
+                  <SalesPage />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />
