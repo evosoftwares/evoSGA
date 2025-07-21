@@ -190,11 +190,11 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
 
         {/* Metrics Summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200">
+          <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">Total Pipeline</p>
-                <p className="text-2xl font-bold text-blue-900">
+                <p className="text-sm font-medium text-gray-600">Total Pipeline</p>
+                <p className="text-2xl font-bold text-blue-700">
                   {new Intl.NumberFormat('pt-BR', {
                     style: 'currency',
                     currency: 'BRL',
@@ -206,20 +206,20 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-xl border border-emerald-200">
+          <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-emerald-600">Oportunidades</p>
-                <p className="text-2xl font-bold text-emerald-900">{boardMetrics.totalCount}</p>
+                <p className="text-sm font-medium text-gray-600">Oportunidades</p>
+                <p className="text-2xl font-bold text-blue-700">{boardMetrics.totalCount}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 p-4 rounded-xl border border-amber-200">
+          <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-amber-600">Ticket Médio</p>
-                <p className="text-2xl font-bold text-amber-900">
+                <p className="text-sm font-medium text-gray-600">Ticket Médio</p>
+                <p className="text-2xl font-bold text-blue-700">
                   {boardMetrics.totalCount > 0 
                     ? new Intl.NumberFormat('pt-BR', {
                         style: 'currency',
@@ -234,11 +234,11 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-4 rounded-xl border border-purple-200">
+          <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-600">Prob. Média</p>
-                <p className="text-2xl font-bold text-purple-900">
+                <p className="text-sm font-medium text-gray-600">Prob. Média</p>
+                <p className="text-2xl font-bold text-blue-700">
                   {boardMetrics.totalCount > 0 
                     ? Math.round(filteredOpportunities.reduce((sum, opp) => sum + opp.probability, 0) / boardMetrics.totalCount)
                     : 0

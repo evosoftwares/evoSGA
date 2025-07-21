@@ -35,7 +35,9 @@
       "Bash(ls:*)",
       "Bash(psql:*)",
       "WebFetch(domain:dgkcpzvcotwmfcmhtrjh.supabase.co)",
-      "Bash(open http://localhost:8082/arquivos)"
+      "Bash(open http://localhost:8082/arquivos)",
+      "Bash(eslint:*)",
+      "Bash(base64:*)"
     ],
     "deny": []
   }

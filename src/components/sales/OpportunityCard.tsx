@@ -80,11 +80,11 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
 
   // Obter cor da probabilidade
   const getProbabilityColor = (probability: number) => {
-    if (probability >= 80) return 'text-emerald-700 bg-emerald-50 border-emerald-200';
-    if (probability >= 60) return 'text-blue-700 bg-blue-50 border-blue-200';
-    if (probability >= 40) return 'text-amber-700 bg-amber-50 border-amber-200';
-    if (probability >= 20) return 'text-orange-700 bg-orange-50 border-orange-200';
-    return 'text-red-700 bg-red-50 border-red-200';
+    if (probability >= 80) return 'text-blue-700 bg-blue-50 border-blue-200';
+    if (probability >= 60) return 'text-blue-600 bg-blue-50 border-blue-200';
+    if (probability >= 40) return 'text-gray-600 bg-gray-50 border-gray-200';
+    if (probability >= 20) return 'text-gray-500 bg-gray-50 border-gray-200';
+    return 'text-gray-400 bg-gray-50 border-gray-200';
   };
 
   // Handler para abrir modal de proposta
@@ -107,11 +107,9 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={`bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3 cursor-pointer 
-            transition-all duration-200 ease-in-out
-            hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5
-            ${snapshot.isDragging ? 'rotate-1 shadow-xl scale-105 border-blue-300' : ''} 
+            ${snapshot.isDragging ? 'border-blue-300' : ''} 
             ${isClosed ? 'opacity-70 bg-gray-50' : ''}
-            backdrop-blur-sm`}
+            `}
           onClick={onClick}
         >
           <div className="space-y-3">
@@ -139,23 +137,23 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
             </div>
 
             {/* Valor do Negócio */}
-            <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-lg p-3 border-l-4 border-emerald-200">
+            <div className="bg-blue-50 rounded-lg p-3 border-l-4 border-blue-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="bg-gradient-to-r from-emerald-500 to-green-500 p-1.5 rounded-lg">
+                  <div className="bg-blue-500 p-1.5 rounded-lg">
                     <DollarSign className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <p className="text-xs text-emerald-600 font-medium">Valor do Negócio</p>
-                    <p className="text-lg font-bold text-emerald-700">
+                    <p className="text-xs text-blue-600 font-medium">Valor do Negócio</p>
+                    <p className="text-lg font-bold text-blue-700">
                       {formatCurrency(opportunity.deal_value, opportunity.currency)}
                     </p>
                   </div>
                 </div>
                 {opportunity.expected_close_date && (
                   <div className="text-right">
-                    <p className="text-xs text-emerald-600 font-medium">Previsão</p>
-                    <p className="text-sm font-semibold text-emerald-700">
+                    <p className="text-xs text-blue-600 font-medium">Previsão</p>
+                    <p className="text-sm font-semibold text-blue-700">
                       {formatDate(opportunity.expected_close_date)}
                     </p>
                   </div>
@@ -165,33 +163,33 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
 
             {/* Informações do Cliente */}
             {(opportunity.client_name || opportunity.client_company) && (
-              <div className="bg-blue-50 rounded-lg p-3 border-l-4 border-blue-200">
+              <div className="bg-gray-50 rounded-lg p-3 border-l-4 border-gray-200">
                 <div className="space-y-1">
                   {opportunity.client_company && (
                     <div className="flex items-center gap-2">
-                      <Building2 className="w-3 h-3 text-blue-500" />
-                      <span className="text-xs font-medium text-blue-700">{opportunity.client_company}</span>
+                      <Building2 className="w-3 h-3 text-gray-500" />
+                      <span className="text-xs font-medium text-gray-700">{opportunity.client_company}</span>
                     </div>
                   )}
                   {opportunity.client_name && (
                     <div className="flex items-center gap-2">
-                      <User className="w-3 h-3 text-blue-500" />
-                      <span className="text-xs text-blue-600">{opportunity.client_name}</span>
+                      <User className="w-3 h-3 text-gray-500" />
+                      <span className="text-xs text-gray-600">{opportunity.client_name}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-3 mt-2">
                     {opportunity.client_email && (
                       <div className="flex items-center gap-1">
-                        <Mail className="w-3 h-3 text-blue-500" />
-                        <span className="text-xs text-blue-600 truncate max-w-20" title={opportunity.client_email}>
+                        <Mail className="w-3 h-3 text-gray-500" />
+                        <span className="text-xs text-gray-600 truncate max-w-20" title={opportunity.client_email}>
                           {opportunity.client_email}
                         </span>
                       </div>
                     )}
                     {opportunity.client_phone && (
                       <div className="flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-blue-500" />
-                        <span className="text-xs text-blue-600">{opportunity.client_phone}</span>
+                        <Phone className="w-3 h-3 text-gray-500" />
+                        <span className="text-xs text-gray-600">{opportunity.client_phone}</span>
                       </div>
                     )}
                   </div>
@@ -240,17 +238,17 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
               }`}>
                 {/* Fonte do Lead */}
                 {opportunity.source && (
-                  <div className="flex items-center gap-1.5 bg-purple-50 px-2 py-1 rounded-full">
-                    <TrendingUp className="w-3 h-3 text-purple-500" />
-                    <span className="font-medium text-purple-700 capitalize">{opportunity.source}</span>
+                  <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded-full">
+                    <TrendingUp className="w-3 h-3 text-blue-500" />
+                    <span className="font-medium text-blue-700 capitalize">{opportunity.source}</span>
                   </div>
                 )}
 
                 {/* Data de Previsão */}
                 {opportunity.expected_close_date && (
-                  <div className="flex items-center gap-1.5 bg-amber-50 px-2 py-1 rounded-full">
-                    <Calendar className="w-3 h-3 text-amber-500" />
-                    <span className="font-medium text-amber-700">{formatDate(opportunity.expected_close_date)}</span>
+                  <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded-full">
+                    <Calendar className="w-3 h-3 text-blue-500" />
+                    <span className="font-medium text-blue-700">{formatDate(opportunity.expected_close_date)}</span>
                   </div>
                 )}
 
@@ -269,7 +267,7 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
                     onClick={handleGenerateProposal}
                     size="sm"
                     variant="outline"
-                    className="h-7 px-2 text-xs bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-700 hover:from-blue-100 hover:to-indigo-100 hover:border-blue-300 transition-all duration-200"
+                    className="h-7 px-2 text-xs bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-all duration-200"
                   >
                     <FileText className="w-3 h-3 mr-1" />
                     Gerar Proposta
@@ -277,10 +275,10 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
                 )}
 
                 {assigneeName && (
-                  <div className={`flex items-center gap-2 text-xs bg-gradient-to-r from-gray-50 to-gray-100 px-3 py-1.5 rounded-full ${
-                    isClosed ? 'text-gray-500' : 'text-gray-700'
+                  <div className={`flex items-center gap-2 text-xs bg-blue-50 px-3 py-1.5 rounded-full ${
+                    isClosed ? 'text-gray-500' : 'text-blue-700'
                   }`}>
-                    <div className="w-6 h-6 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full flex items-center justify-center shadow-sm">
+                    <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-sm">
                       <User className="w-3 h-3 text-white" />
                     </div>
                     <span className="font-semibold max-w-20 truncate">{assigneeName}</span>
@@ -292,8 +290,8 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
             {/* Indicador visual de oportunidade fechada */}
             {isClosedWon && (
               <div className="flex items-center justify-center pt-2">
-                <div className="flex items-center gap-2 text-xs text-emerald-700 bg-gradient-to-r from-emerald-50 to-green-50 px-3 py-2 rounded-full border border-emerald-200 shadow-sm">
-                  <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-3 py-2 rounded-full border border-blue-200 shadow-sm">
+                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
                   <span className="font-semibold">Negócio Fechado!</span>
                 </div>
               </div>
@@ -301,8 +299,8 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
 
             {isClosedLost && (
               <div className="flex items-center justify-center pt-2">
-                <div className="flex items-center gap-2 text-xs text-red-700 bg-gradient-to-r from-red-50 to-red-50 px-3 py-2 rounded-full border border-red-200 shadow-sm">
-                  <div className="w-2.5 h-2.5 bg-red-500 rounded-full"></div>
+                <div className="flex items-center gap-2 text-xs text-gray-700 bg-gray-50 px-3 py-2 rounded-full border border-gray-200 shadow-sm">
+                  <div className="w-2.5 h-2.5 bg-gray-500 rounded-full"></div>
                   <span className="font-semibold">Oportunidade Perdida</span>
                 </div>
               </div>

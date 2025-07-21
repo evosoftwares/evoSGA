@@ -292,6 +292,23 @@ export const useSalesKanbanMutations = (projectId?: string) => {
   // Add tag to opportunity
   const addTagToOpportunityMutation = useMutation({
     mutationFn: async ({ opportunityId, tagId }: { opportunityId: string; tagId: string }) => {
+      // Check if the tag already exists for this opportunity
+      const { data: existingTag, error: fetchError } = await supabase
+        .from('sales_opportunity_tags')
+        .select('id')
+        .eq('opportunity_id', opportunityId)
+        .eq('tag_id', tagId)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw fetchError;
+      }
+
+      if (existingTag) {
+        console.warn(`Tag ${tagId} already exists for opportunity ${opportunityId}. Skipping insertion.`);
+        return { success: true, message: 'Tag already exists' };
+      }
+
       const { error } = await supabase
         .from('sales_opportunity_tags')
         .insert({ opportunity_id: opportunityId, tag_id: tagId });

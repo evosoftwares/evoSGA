@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
-import { X, DollarSign, Calendar, Percent, User, Building2, Phone, Mail, Plus, Tag, Settings } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import React, { useState, useEffect } from 'react';
+import { X, DollarSign, Calendar, Percent, User, Building2, Phone, Mail, Plus, Tag, Settings, FileText, Eye, Download, Clock } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { SalesOpportunity, SalesTag, SalesOpportunityTag, Project, Profile, SalesColumn } from '@/types/database';
+import { SalesOpportunity, SalesTag, SalesOpportunityTag, Project, Profile, SalesColumn, ProposalSummary } from '@/types/database';
 import DeleteOpportunityConfirmationModal from './DeleteOpportunityConfirmationModal';
 import SalesTagManager from './SalesTagManager';
+import { GenerateProposalModal } from './GenerateProposalModal';
+import { ProposalHistoryModal } from './ProposalHistoryModal';
+import { proposalService } from '@/services/proposalService';
 
 interface OpportunityDetailModalProps {
   opportunity: SalesOpportunity;
@@ -45,6 +48,29 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
   const [selectedTagToAdd, setSelectedTagToAdd] = useState('');
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+  const [isGenerateProposalOpen, setIsGenerateProposalOpen] = useState(false);
+  const [isProposalHistoryOpen, setIsProposalHistoryOpen] = useState(false);
+  const [proposals, setProposals] = useState<ProposalSummary[]>([]);
+
+  // Load proposals for this opportunity
+  const loadProposals = async () => {
+    try {
+      const proposalsData = await proposalService.getProposalsByOpportunity(opportunity.id);
+      setProposals(proposalsData);
+    } catch (error) {
+      console.error('Error loading proposals:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && opportunity.id) {
+      loadProposals();
+    }
+  }, [isOpen, opportunity.id]);
+
+  const handleProposalCreated = () => {
+    loadProposals(); // Refresh the proposals list
+  };
 
   const handleEdit = () => {
     setEditData({
@@ -174,6 +200,9 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
                 )}
               </div>
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Modal para visualizar e editar detalhes de oportunidades de vendas
+            </DialogDescription>
           </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6 p-4">
@@ -506,6 +535,108 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
               </div>
             </div>
 
+            {/* Proposals Section */}
+            <div className="bg-white p-3 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold text-gray-900">Propostas</h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsGenerateProposalOpen(true)}
+                  className="h-8 px-3"
+                  disabled={isEditing}
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  Nova Proposta
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {proposals.length > 0 ? (
+                  proposals.slice(0, 3).map((proposal) => (
+                    <div 
+                      key={proposal.id} 
+                      className="p-2 border border-gray-100 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+                      onClick={() => setIsProposalHistoryOpen(true)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-3 h-3 text-blue-500" />
+                            <span className="text-sm font-medium text-gray-900 truncate">
+                              {proposal.title}
+                            </span>
+                            <Badge
+                              variant="secondary"
+                              className={`text-xs ${
+                                proposal.status === 'draft' ? 'bg-gray-100 text-gray-700' :
+                                proposal.status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                                proposal.status === 'viewed' ? 'bg-yellow-100 text-yellow-700' :
+                                proposal.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {proposal.status === 'draft' ? 'Rascunho' :
+                               proposal.status === 'sent' ? 'Enviado' :
+                               proposal.status === 'viewed' ? 'Visualizado' :
+                               proposal.status === 'accepted' ? 'Aceito' :
+                               'Rejeitado'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs text-gray-500">
+                              {formatCurrency(proposal.total_price || 0)}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {formatDate(proposal.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            title="Visualizar proposta"
+                            onClick={() => setIsProposalHistoryOpen(true)}
+                          >
+                            <Eye className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            title="Baixar PDF"
+                          >
+                            <Download className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4">
+                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">Nenhuma proposta criada</p>
+                    <p className="text-xs text-gray-400">Clique em "Nova Proposta" para começar</p>
+                  </div>
+                )}
+
+                {proposals.length > 3 && (
+                  <div className="text-center pt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsProposalHistoryOpen(true)}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      Ver todas as propostas ({proposals.length})
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Timestamps */}
             <div className="bg-white p-3 rounded-lg border border-gray-200">
               <h4 className="font-semibold text-gray-900 mb-2">Histórico</h4>
@@ -548,6 +679,31 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
         isOpen={isTagManagerOpen}
         onClose={() => setIsTagManagerOpen(false)}
         tags={tags}
+      />
+
+      <GenerateProposalModal
+        isOpen={isGenerateProposalOpen}
+        onClose={() => setIsGenerateProposalOpen(false)}
+        opportunity={{
+          id: opportunity.id,
+          title: opportunity.title,
+          description: opportunity.description || '',
+          client_name: opportunity.client_name || '',
+          client_company: opportunity.client_company || '',
+          client_email: opportunity.client_email || '',
+          client_phone: opportunity.client_phone || '',
+          deal_value: opportunity.deal_value,
+          currency: opportunity.currency || 'BRL',
+          probability: opportunity.probability
+        }}
+        onProposalCreated={handleProposalCreated}
+      />
+
+      <ProposalHistoryModal
+        isOpen={isProposalHistoryOpen}
+        onClose={() => setIsProposalHistoryOpen(false)}
+        opportunityId={opportunity.id}
+        opportunityTitle={opportunity.title}
       />
     </>
   );

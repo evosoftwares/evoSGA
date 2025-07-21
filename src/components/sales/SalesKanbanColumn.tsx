@@ -162,16 +162,8 @@ const SalesKanbanColumn: React.FC<SalesKanbanColumnProps> = ({
 
   // Get column background color
   const getColumnColor = () => {
-    switch (column.color) {
-      case 'blue': return 'bg-blue-50 border-blue-200';
-      case 'green': return 'bg-emerald-50 border-emerald-200';
-      case 'red': return 'bg-red-50 border-red-200';
-      case 'yellow': return 'bg-amber-50 border-amber-200';
-      case 'orange': return 'bg-orange-50 border-orange-200';
-      case 'purple': return 'bg-purple-50 border-purple-200';
-      case 'gray': return 'bg-gray-50 border-gray-200';
-      default: return 'bg-gray-50 border-gray-200';
-    }
+    // Always return white background with a light blue border
+    return 'bg-white border-blue-100';
   };
 
   // Render opportunities by project (for completed columns)
@@ -272,9 +264,9 @@ const SalesKanbanColumn: React.FC<SalesKanbanColumnProps> = ({
       <div className="p-4 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full bg-${column.color}-500`}></div>
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
             <h3 className="font-semibold text-gray-900 text-sm">{column.title}</h3>
-            <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full font-medium">
+            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-medium">
               {columnMetrics.count}
             </span>
           </div>
@@ -282,12 +274,12 @@ const SalesKanbanColumn: React.FC<SalesKanbanColumnProps> = ({
         
         {/* Column Metrics */}
         <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+          <div className="bg-blue-50 p-2 rounded-lg border border-blue-200">
             <div className="flex items-center gap-1.5">
-              <DollarSign className="w-3 h-3 text-emerald-600" />
-              <span className="text-xs font-medium text-emerald-700">Total</span>
+              <DollarSign className="w-3 h-3 text-blue-600" />
+              <span className="text-xs font-medium text-blue-700">Total</span>
             </div>
-            <p className="text-sm font-bold text-emerald-800 mt-0.5">
+            <p className="text-sm font-bold text-blue-800 mt-0.5">
               {formatCurrency(columnMetrics.totalValue)}
             </p>
           </div>
@@ -330,9 +322,7 @@ const SalesKanbanColumn: React.FC<SalesKanbanColumnProps> = ({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 p-4 overflow-y-auto ${
-              snapshot.isDraggingOver ? 'bg-blue-50' : ''
-            }`}
+            className="flex-1 p-4 overflow-y-auto"
           >
             {/* Add Opportunity Input */}
             {isAdding && (

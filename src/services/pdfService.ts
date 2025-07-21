@@ -55,6 +55,9 @@ class PDFService {
       // Resumo executivo
       yPosition = this.addSection(doc, 'RESUMO EXECUTIVO', processedProposal.executiveSummary, yPosition, margin, contentWidth);
 
+      // Metodologia e Tecnologias
+      yPosition = this.addMethodologyAndTech(doc, yPosition, margin, contentWidth);
+
       // Escopo do projeto
       yPosition = this.addSection(doc, 'ESCOPO DO PROJETO', processedProposal.projectScope, yPosition, margin, contentWidth);
 
@@ -69,6 +72,9 @@ class PDFService {
 
       // Investimento
       yPosition = this.addSection(doc, 'INVESTIMENTO', processedProposal.investment, yPosition, margin, contentWidth);
+
+      // Método de Pagamento
+      yPosition = this.addPaymentMethod(doc, proposalData, yPosition, margin, contentWidth);
 
       // Termos e condições
       yPosition = this.addSection(doc, 'TERMOS E CONDIÇÕES', processedProposal.terms, yPosition, margin, contentWidth);
@@ -96,15 +102,18 @@ class PDFService {
   private addHeader(doc: jsPDF, options: PDFGenerationOptions, yPosition: number): number {
     const pageWidth = doc.internal.pageSize.getWidth();
     
-    // Logo placeholder (se fornecido)
-    if (options.companyLogo) {
-      // TODO: Implementar inserção de logo quando necessário
+    // Logo da empresa
+    try {
+      // Load logo from public folder - use async method properly
+      this.addLogoToHeader(doc, yPosition);
+    } catch (error) {
+      logger.warn('Failed to add logo to PDF', error);
     }
 
     // Nome da empresa
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text(options.companyName || 'EvoSGA', 20, yPosition);
+    doc.text(options.companyName || 'EvoSGA', 80, yPosition);
 
     // Informações da empresa
     doc.setFontSize(10);
@@ -116,7 +125,9 @@ class PDFService {
     ].filter(Boolean);
 
     companyInfo.forEach((info, index) => {
-      doc.text(info!, 20, yPosition + 15 + (index * 5));
+      if (info) {
+        doc.text(info, 80, yPosition + 15 + (index * 5));
+      }
     });
 
     // Linha separadora
@@ -126,6 +137,31 @@ class PDFService {
     return yPosition + 45;
   }
 
+  private addLogoToHeader(doc: jsPDF, yPosition: number): void {
+    // Create a simple rectangular logo placeholder
+    const logoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAoAAAAGQCAYAAAAMEqKAAAAACXBIWXMAABYlAAAWJQFJUiTwAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAApySURBVHja7N0xbttAEEBBLpAbiCVLoB8AyQmsVCm5hC0nsBG3aVJEhWEUpoAKbyE48gFcugDpBNZ3gCEBFcTMDClfyNkhOd93AKhQVdVN13U3mTk8fLwDgKo0TXPT/4xhGNZd1/0ZhuHfHQBU5eD58+e3I39t13Xfd133/g4AdXnz5s2n0QAtSZIs//79+64OAKryzz9v7w5/X9VrGIb3dwCoSvNfO7dLkyRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkvQrkiRJ+hVJkiT9iiRJkn5FkiRJvyJJkqRfkSRJ0q9IkiTpVyRJkl0QGwBJGOzq7KzVBAAAAQMSRBJVk0BAAABCA==';
+    
+    try {
+      // Use a simple rectangular logo placeholder
+      // Blue rectangle matching the EvoSGA color scheme
+      doc.setFillColor(53, 108, 255); // EvoSGA blue color
+      doc.rect(20, yPosition - 5, 50, 25, 'F');
+      
+      // Add "EvoSGA" text in white over the blue rectangle
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255); // White text
+      doc.text('EvoSGA', 33, yPosition + 7);
+      
+      // Reset text color to black for other text
+      doc.setTextColor(0, 0, 0);
+      
+      logger.info('Logo placeholder added successfully to PDF header');
+    } catch (error) {
+      logger.warn('Failed to add logo image to PDF', error);
+    }
+  }
+
   private addTitle(doc: jsPDF, proposalData: ProposalData, yPosition: number, margin: number): number {
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
@@ -133,7 +169,8 @@ class PDFService {
 
     doc.setFontSize(14);
     doc.setFont('helvetica', 'normal');
-    doc.text(proposalData.projectTitle, margin, yPosition + 10);
+    const projectTitle = proposalData.projectTitle || 'Projeto sem título';
+    doc.text(projectTitle, margin, yPosition + 10);
 
     // Data
     const currentDate = new Date().toLocaleDateString('pt-BR');
@@ -159,7 +196,9 @@ class PDFService {
     ].filter(Boolean);
 
     clientInfo.forEach((info, index) => {
-      doc.text(info!, margin, yPosition + 15 + (index * 5));
+      if (info) {
+        doc.text(info, margin, yPosition + 15 + (index * 5));
+      }
     });
 
     return yPosition + 15 + (clientInfo.length * 5) + 10;
@@ -181,7 +220,8 @@ class PDFService {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    const lines = doc.splitTextToSize(content, contentWidth);
+    const safeContent = content || 'Conteúdo não disponível';
+    const lines = doc.splitTextToSize(safeContent, contentWidth);
     doc.text(lines, margin, yPosition + 10);
 
     return yPosition + 10 + (lines.length * 5) + 10;
@@ -202,12 +242,48 @@ class PDFService {
     doc.setFont('helvetica', 'normal');
 
     deliverables.forEach((deliverable, index) => {
-      const bulletPoint = `• ${deliverable}`;
+      const safeDeliverable = deliverable || 'Entregável não especificado';
+      const bulletPoint = `• ${safeDeliverable}`;
       const lines = doc.splitTextToSize(bulletPoint, contentWidth);
       doc.text(lines, margin, yPosition + 15 + (index * 8));
     });
 
     return yPosition + 15 + (deliverables.length * 8) + 10;
+  }
+
+  private addMethodologyAndTech(doc: jsPDF, yPosition: number, margin: number, contentWidth: number): number {
+    // Verificar se precisa de nova página
+    if (yPosition > 220) {
+      doc.addPage();
+      yPosition = 20;
+    }
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('METODOLOGIA E TECNOLOGIAS', margin, yPosition);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+
+    const methodologyContent = `Este projeto será desenvolvido utilizando metodologia ágil Scrum, com sprints de 2 semanas, reuniões diárias de alinhamento e entregas incrementais que garantem maior qualidade e controle do projeto.
+
+TECNOLOGIAS UTILIZADAS:
+• Flutter: Framework multiplataforma para desenvolvimento de aplicativos iOS e Android
+• Firebase/Supabase: Backend como serviço para banco de dados, autenticação e armazenamento
+• Clean Architecture: Arquitetura que garante código limpo, testável e manutenível
+• Padrões MVVM/BLoC: Gerenciamento de estado reativo e organizado
+
+BENEFÍCIOS DA ESCOLHA TECNOLÓGICA:
+• Desenvolvimento multiplataforma: uma única base de código para iOS e Android
+• Redução de custos de desenvolvimento e manutenção
+• Performance nativa em ambas as plataformas
+• Escalabilidade garantida pela infraestrutura em nuvem
+• Facilidade de manutenção e atualizações`;
+
+    const lines = doc.splitTextToSize(methodologyContent, contentWidth);
+    doc.text(lines, margin, yPosition + 10);
+
+    return yPosition + 10 + (lines.length * 5) + 10;
   }
 
   private addFunctionPoints(doc: jsPDF, functionPoints: ProcessedProposal['functionPoints'], yPosition: number, margin: number, contentWidth: number): number {
@@ -237,6 +313,27 @@ class PDFService {
     });
 
     return yPosition + 15 + (fpInfo.length * 5) + 10;
+  }
+
+  private addPaymentMethod(doc: jsPDF, proposalData: ProposalData, yPosition: number, margin: number, contentWidth: number): number {
+    // Verificar se precisa de nova página
+    if (yPosition > 220) {
+      doc.addPage();
+      yPosition = 20;
+    }
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CONDIÇÕES DE PAGAMENTO', margin, yPosition);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const paymentContent = proposalData.paymentMethod || 'Condições de pagamento a serem definidas em contrato.';
+    const lines = doc.splitTextToSize(paymentContent, contentWidth);
+    doc.text(lines, margin, yPosition + 10);
+
+    return yPosition + 10 + (lines.length * 5) + 10;
   }
 
   private addFooter(doc: jsPDF, options: PDFGenerationOptions): void {

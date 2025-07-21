@@ -13,7 +13,7 @@ export interface IFPUGInputs {
   
   // Fatores de Ajuste
   complexityFactor: 'low' | 'medium' | 'high'; // Fator de complexidade geral
-  teamExperience: 'junior' | 'pleno' | 'senior'; // Experiência da equipe
+  teamExperience: 'alpha' | 'beta' | 'omega'; // Experiência da equipe
   technologyComplexity: 'low' | 'medium' | 'high'; // Complexidade tecnológica
 }
 
@@ -25,6 +25,8 @@ export interface IFPUGResult {
   estimatedDays: number;
   estimatedWeeks: number;
   timeline: string;
+  pricePerFunctionPoint: number;
+  totalPrice: number;
   breakdown: {
     dataFunctions: number;
     transactionalFunctions: number;
@@ -44,6 +46,12 @@ export interface ProjectEstimate {
   totalDays: number;
   totalWeeks: number;
   timeline: string;
+  totalPrice: number;
+  priceBreakdown: {
+    functionPointsPrice: number;
+    pricePerFP: number;
+    totalFunctionPoints: number;
+  };
 }
 
 class IFPUGCalculatorService {
@@ -58,9 +66,16 @@ class IFPUGCalculatorService {
 
   // Fatores de produtividade (horas por ponto de função)
   private readonly productivityFactors = {
-    junior: 12, // 12 horas por PF
-    pleno: 8,   // 8 horas por PF
-    senior: 6   // 6 horas por PF
+    alpha: 12, // 12 horas por PF
+    beta: 8,   // 8 horas por PF
+    omega: 6   // 6 horas por PF
+  };
+
+  // Preços por ponto de função baseados na experiência da equipe
+  private readonly pricePerFunctionPoint = {
+    alpha: 120, // R$ 120,00 por PF
+    beta: 140,  // R$ 140,00 por PF  
+    omega: 160  // R$ 160,00 por PF
   };
 
   // Fatores de complexidade
@@ -110,6 +125,10 @@ class IFPUGCalculatorService {
       // Gerar timeline textual
       const timeline = this.generateTimeline(estimatedWeeks);
 
+      // Calcular preço baseado em pontos de função e experiência da equipe
+      const pricePerFP = this.pricePerFunctionPoint[inputs.teamExperience];
+      const totalPrice = adjustedFunctionPoints * pricePerFP;
+
       const result: IFPUGResult = {
         unadjustedFunctionPoints,
         adjustmentFactor,
@@ -118,6 +137,8 @@ class IFPUGCalculatorService {
         estimatedDays,
         estimatedWeeks,
         timeline,
+        pricePerFunctionPoint: pricePerFP,
+        totalPrice,
         breakdown: {
           dataFunctions,
           transactionalFunctions,
@@ -174,7 +195,13 @@ class IFPUGCalculatorService {
         phases,
         totalDays: phasesTotalDays,
         totalWeeks,
-        timeline
+        timeline,
+        totalPrice: functionPoints.totalPrice,
+        priceBreakdown: {
+          functionPointsPrice: functionPoints.totalPrice,
+          pricePerFP: functionPoints.pricePerFunctionPoint,
+          totalFunctionPoints: functionPoints.adjustedFunctionPoints
+        }
       };
 
     } catch (error) {
@@ -211,7 +238,7 @@ class IFPUGCalculatorService {
   }
 
   // Método para estimar baseado em descrição textual (usando IA)
-  estimateFromDescription(description: string, teamExperience: IFPUGInputs['teamExperience'] = 'pleno'): IFPUGInputs {
+  estimateFromDescription(description: string, teamExperience: IFPUGInputs['teamExperience'] = 'beta'): IFPUGInputs {
     // Análise heurística simples baseada em palavras-chave
     const text = description.toLowerCase();
     

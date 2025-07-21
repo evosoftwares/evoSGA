@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,32 +10,29 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, FileText, Download, Eye, Calculator, Clock, Users, Zap, Database, ArrowRight, Package, ArrowLeft, CheckCircle, AlertCircle, Target, Calendar, TrendingUp, BarChart3 } from 'lucide-react';
+import { Loader2, FileText, Download, Eye, Calculator, Clock, Users, Zap, Database, ArrowRight, Package, ArrowLeft, CheckCircle, AlertCircle, Target, Calendar, TrendingUp, BarChart3, Folder, Link, Inbox, Send, Search, Settings, Palette, TestTube, Rocket, DollarSign, Layout, Code, Monitor, Smartphone, Globe, Shield, CreditCard, Building2, Users2, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
-import { groqService } from '@/services/groqService';
+import { groqService, type ProposalData, type DetailedSystemAnalysis } from '@/services/groqService';
 import { pdfService } from '@/services/pdfService';
 import { ifpugCalculator, type IFPUGInputs, type ProjectEstimate } from '@/services/ifpugCalculatorService';
+import { proposalService, type CreateProposalData } from '@/services/proposalService';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Opportunity } from '@/types/opportunity';
 
 interface GenerateProposalModalProps {
   isOpen: boolean;
   onClose: () => void;
   opportunity: Opportunity;
+  onProposalCreated?: () => void;
 }
 
 interface ProposalFormData {
   serviceScope: string;
   deliverables: string[];
   additionalNotes: string;
-  // IFPUG Inputs
-  internalLogicalFiles: number;
-  externalInterfaceFiles: number;
-  externalInputs: number;
-  externalOutputs: number;
-  externalInquiries: number;
-  complexityFactor: 'low' | 'medium' | 'high';
-  teamExperience: 'junior' | 'pleno' | 'senior';
-  technologyComplexity: 'low' | 'medium' | 'high';
+  paymentMethod: string;
+  // Team Experience for pricing
+  teamExperience: 'alpha' | 'beta' | 'omega';
 }
 
 // Opções de entregáveis disponíveis
@@ -77,72 +74,42 @@ const DELIVERABLE_OPTIONS = [
   }
 ];
 
-export function GenerateProposalModal({ isOpen, onClose, opportunity }: GenerateProposalModalProps) {
+export function GenerateProposalModal({ isOpen, onClose, opportunity, onProposalCreated }: GenerateProposalModalProps) {
+  const { user } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentStep, setCurrentStep] = useState<'form' | 'ifpug' | 'review'>('form');
+  const [currentStep, setCurrentStep] = useState<'form' | 'preview' | 'screens' | 'ifpug' | 'review'>('form');
   const [formData, setFormData] = useState<ProposalFormData>({
     serviceScope: '',
     deliverables: [],
     additionalNotes: '',
-    internalLogicalFiles: 1,
-    externalInterfaceFiles: 0,
-    externalInputs: 1,
-    externalOutputs: 1,
-    externalInquiries: 1,
-    complexityFactor: 'medium',
-    teamExperience: 'pleno',
-    technologyComplexity: 'medium'
+    paymentMethod: '',
+    teamExperience: 'beta'
   });
   const [projectEstimate, setProjectEstimate] = useState<ProjectEstimate | null>(null);
   const [generatedPdf, setGeneratedPdf] = useState<Blob | null>(null);
+  const [processedProposal, setProcessedProposal] = useState<any>(null);
+  const [detailedComponents, setDetailedComponents] = useState<DetailedSystemAnalysis | null>(null);
+  const [approvedScreensAndComponents, setApprovedScreensAndComponents] = useState<DetailedSystemAnalysis | null>(null);
 
-  // Auto-estimar IFPUG baseado na descrição quando o escopo muda
-  useEffect(() => {
-    if (formData.serviceScope.length > 50) {
-      const estimated = ifpugCalculator.estimateFromDescription(
-        formData.serviceScope,
-        formData.teamExperience
-      );
-      
-      setFormData(prev => ({
-        ...prev,
-        ...estimated
-      }));
-    }
-  }, [formData.serviceScope, formData.teamExperience]);
-
-  // Calcular estimativa do projeto quando inputs IFPUG mudam
-  useEffect(() => {
-    const ifpugInputs: IFPUGInputs = {
-      internalLogicalFiles: formData.internalLogicalFiles,
-      externalInterfaceFiles: formData.externalInterfaceFiles,
-      externalInputs: formData.externalInputs,
-      externalOutputs: formData.externalOutputs,
-      externalInquiries: formData.externalInquiries,
-      complexityFactor: formData.complexityFactor,
-      teamExperience: formData.teamExperience,
-      technologyComplexity: formData.technologyComplexity
+  // Convert form data to ProposalData format
+  const convertToProposalData = (formData: ProposalFormData): ProposalData => {
+    return {
+      clientName: opportunity.client_name,
+      clientCompany: opportunity.client_company,
+      clientEmail: opportunity.client_email,
+      clientPhone: opportunity.client_phone,
+      projectTitle: opportunity.title,
+      projectDescription: opportunity.description,
+      dealValue: opportunity.deal_value,
+      currency: opportunity.currency || 'BRL',
+      serviceScope: formData.serviceScope,
+      additionalRequirements: formData.additionalNotes,
+      paymentMethod: formData.paymentMethod,
+      deliverables: formData.deliverables.join(', ')
     };
+  };
 
-    const validation = ifpugCalculator.validateInputs(ifpugInputs);
-    if (validation.isValid) {
-      try {
-        const estimate = ifpugCalculator.calculateProjectEstimate(ifpugInputs);
-        setProjectEstimate(estimate);
-      } catch (error) {
-        console.error('Erro ao calcular estimativa:', error);
-      }
-    }
-  }, [
-    formData.internalLogicalFiles,
-    formData.externalInterfaceFiles,
-    formData.externalInputs,
-    formData.externalOutputs,
-    formData.externalInquiries,
-    formData.complexityFactor,
-    formData.teamExperience,
-    formData.technologyComplexity
-  ]);
+  // A estimativa será calculada pela IA durante a geração da proposta
 
   const handleInputChange = (field: keyof ProposalFormData, value: string | number) => {
     setFormData(prev => ({
@@ -186,18 +153,15 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
     setCurrentStep('form');
     setGeneratedPdf(null);
     setProjectEstimate(null);
+    setProcessedProposal(null);
+    setDetailedComponents(null);
+    setApprovedScreensAndComponents(null);
     setFormData({
       serviceScope: '',
       deliverables: [],
       additionalNotes: '',
-      internalLogicalFiles: 1,
-      externalInterfaceFiles: 0,
-      externalInputs: 1,
-      externalOutputs: 1,
-      externalInquiries: 1,
-      complexityFactor: 'medium',
-      teamExperience: 'pleno',
-      technologyComplexity: 'medium'
+      paymentMethod: '',
+      teamExperience: 'beta'
     });
     onClose();
   };
@@ -206,24 +170,136 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
 
   const nextStep = () => {
     if (currentStep === 'form') {
-      setCurrentStep('ifpug');
+      handleGeneratePreview();
+    } else if (currentStep === 'preview') {
+      handleGenerateDetailedAnalysis();
+    } else if (currentStep === 'screens') {
+      handleApproveScreensAndCalculateIFPUG();
     } else if (currentStep === 'ifpug') {
       handleGenerateProposal();
     }
   };
 
   const prevStep = () => {
-    if (currentStep === 'ifpug') {
+    if (currentStep === 'preview') {
       setCurrentStep('form');
+    } else if (currentStep === 'screens') {
+      setCurrentStep('preview');
+    } else if (currentStep === 'ifpug') {
+      setCurrentStep('screens');
     } else if (currentStep === 'review') {
       setCurrentStep('ifpug');
     }
   };
 
-  const handleGenerateProposal = async () => {
+  const handleGeneratePreview = async () => {
     // Validações básicas
     if (!formData.serviceScope.trim()) {
       toast.error("Por favor, descreva o escopo do serviço.");
+      return;
+    }
+    
+    if (!formData.paymentMethod.trim()) {
+      toast.error("Por favor, defina o método de pagamento.");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      // Gerar proposta inicial com IA
+      toast.info("Analisando proposta com assistente de IA...");
+
+      const proposalData = convertToProposalData(formData);
+      const generatedProposal = await groqService.generateProposal(proposalData, formData.deliverables);
+      setProcessedProposal(generatedProposal);
+
+      setCurrentStep('preview');
+      toast.success("Proposta inicial gerada! Revise e prossiga para detalhamento de telas.");
+
+    } catch (error) {
+      console.error('Error generating preview:', error);
+      
+      toast.error(error instanceof Error ? error.message : "Erro desconhecido. Tente novamente.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateDetailedAnalysis = async () => {
+    if (!processedProposal) {
+      toast.error("Proposta inicial não encontrada. Tente novamente.");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      // Gerar análise detalhada com IA
+      toast.info("Gerando análise detalhada de todos os componentes...");
+
+      const proposalData = convertToProposalData(formData);
+      const detailedAnalysis = await groqService.generateDetailedSystemAnalysis(proposalData, processedProposal);
+      setDetailedComponents(detailedAnalysis);
+
+      setCurrentStep('screens');
+      toast.success("Análise de telas e componentes gerada! Revise e aprove antes do cálculo IFPUG.");
+
+    } catch (error) {
+      console.error('Error generating detailed analysis:', error);
+      
+      toast.error(error instanceof Error ? error.message : "Erro ao gerar análise detalhada. Tente novamente.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleApproveScreensAndCalculateIFPUG = async () => {
+    if (!detailedComponents) {
+      toast.error("Análise de telas não encontrada. Tente novamente.");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      // Salvar componentes aprovados (por enquanto, aprovação automática)
+      // Em uma implementação futura, aqui seria onde o usuário poderia editar
+      setApprovedScreensAndComponents(detailedComponents);
+
+      // Calcular estimativa usando dados aprovados
+      toast.info("Calculando pontos de função IFPUG baseado nas telas aprovadas...");
+
+      const totalFP = detailedComponents.totalFunctionPoints;
+      const ifpugInputsWithAI: IFPUGInputs = {
+        internalLogicalFiles: Math.round(totalFP * 0.3), // 30% para dados
+        externalInterfaceFiles: 0,
+        externalInputs: Math.round(totalFP * 0.7), // 70% para transações
+        externalOutputs: 0,
+        externalInquiries: 0,
+        complexityFactor: processedProposal?.functionPoints?.complexity || 'medium',
+        teamExperience: formData.teamExperience,
+        technologyComplexity: processedProposal?.functionPoints?.technologyComplexity || 'medium'
+      };
+
+      const finalEstimate = ifpugCalculator.calculateProjectEstimate(ifpugInputsWithAI);
+      setProjectEstimate(finalEstimate);
+
+      setCurrentStep('ifpug');
+      toast.success("Telas aprovadas e IFPUG calculado! Revise a estimativa final.");
+
+    } catch (error) {
+      console.error('Error approving screens and calculating IFPUG:', error);
+      
+      toast.error(error instanceof Error ? error.message : "Erro ao calcular IFPUG. Tente novamente.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateProposal = async () => {
+    if (!processedProposal || !projectEstimate || !user) {
+      toast.error("Dados da proposta não encontrados. Tente novamente.");
       return;
     }
 
@@ -231,18 +307,36 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
     setCurrentStep('review');
 
     try {
-      // Gerar proposta com IA
-      toast.info("Gerando proposta com assistente de IA...");
-
-      const processedProposal = await groqService.generateProposal(formData);
-
       // Gerar PDF
       toast.info("Montando documento final...");
 
-      const pdfBlob = await pdfService.generateProposalPDF(formData, processedProposal);
+      const proposalData = convertToProposalData(formData);
+      const pdfBlob = await pdfService.generateProposalPDF(proposalData, processedProposal, {
+        companyLogo: '/imagens/logo_evo.png'
+      });
       setGeneratedPdf(pdfBlob);
 
-      toast.success("Proposta gerada com sucesso! Revise o documento e faça o download.");
+      // Save proposal to database
+      toast.info("Salvando proposta no banco de dados...");
+
+      const createProposalData: CreateProposalData = {
+        opportunityId: opportunity.id,
+        title: `Proposta para ${opportunity.title}`,
+        processedProposal,
+        projectEstimate,
+        teamExperience: formData.teamExperience,
+        deliverables: formData.deliverables,
+        createdBy: user.id
+      };
+
+      const savedProposal = await proposalService.createProposal(createProposalData);
+      
+      // Call callback to refresh proposals list
+      if (onProposalCreated) {
+        onProposalCreated();
+      }
+      
+      toast.success("Proposta gerada e salva com sucesso! Revise o documento e faça o download.");
 
     } catch (error) {
       console.error('Error generating proposal:', error);
@@ -258,12 +352,36 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
       toast.error("Por favor, descreva o escopo do serviço para gerar a prévia.");
       return;
     }
+    
+    if (!formData.paymentMethod.trim()) {
+      toast.error("Por favor, defina o método de pagamento para gerar a prévia.");
+      return;
+    }
 
     setIsGenerating(true);
 
     try {
-      const processedProposal = await groqService.generateProposal(formData);
-      const pdfBlob = await pdfService.generateProposalPDF(formData, processedProposal);
+      const proposalData = convertToProposalData(formData);
+      const processedProposal = await groqService.generateProposal(proposalData, formData.deliverables);
+      
+      // Calcular estimativa usando dados retornados pela IA
+      const ifpugInputsWithAI: IFPUGInputs = {
+        internalLogicalFiles: processedProposal.functionPoints.dataFunctions,
+        externalInterfaceFiles: 0, // Será incluído no dataFunctions pela IA
+        externalInputs: processedProposal.functionPoints.transactionalFunctions,
+        externalOutputs: 0, // Será incluído no transactionalFunctions pela IA
+        externalInquiries: 0, // Será incluído no transactionalFunctions pela IA
+        complexityFactor: processedProposal.functionPoints.complexity,
+        teamExperience: formData.teamExperience,
+        technologyComplexity: processedProposal.functionPoints.technologyComplexity
+      };
+
+      const finalEstimate = ifpugCalculator.calculateProjectEstimate(ifpugInputsWithAI);
+      setProjectEstimate(finalEstimate);
+      
+      const pdfBlob = await pdfService.generateProposalPDF(proposalData, processedProposal, {
+        companyLogo: '/imagens/logo_evo.png'
+      });
       
       // Abrir preview em nova aba
       pdfService.previewPDF(pdfBlob);
@@ -280,25 +398,24 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
   };
 
   const canProceedFromForm = () => {
-    return formData.serviceScope.trim().length > 0;
+    return formData.serviceScope.trim().length > 0 && formData.paymentMethod.trim().length > 0;
   };
 
-  const canGenerateProposal = () => {
-    return canProceedFromForm() && projectEstimate !== null;
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="w-[96vw] max-w-5xl h-[96vh] max-h-[96vh] overflow-hidden p-0 gap-0 bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
-        <DialogHeader className="px-6 pt-6 pb-4 bg-white/80 backdrop-blur-sm border-b border-slate-200/60">
+      <DialogContent className="w-[96vw] max-w-5xl h-[96vh] max-h-[96vh] overflow-hidden p-0 gap-0 bg-white">
+        <DialogHeader className="px-6 py-6 bg-white/80 backdrop-blur-sm border-b border-slate-200/60">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
                 <FileText className="h-5 w-5 text-white" />
               </div>
               <div>
                 <DialogTitle className="text-xl font-bold text-slate-800">Gerar Proposta Comercial</DialogTitle>
-                <p className="text-sm text-slate-600 mt-0.5">Crie uma proposta profissional com estimativa IFPUG</p>
+                <DialogDescription className="text-sm text-slate-600 mt-0.5">
+                  Crie uma proposta profissional com estimativa IFPUG
+                </DialogDescription>
               </div>
             </div>
             <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">
@@ -309,60 +426,102 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
 
         <div className="flex-1 overflow-y-auto px-6">
           {/* Progress Steps - Redesigned */}
-          <div className="sticky top-0 bg-white/90 backdrop-blur-sm py-4 mb-6 z-10">
+          <div className="sticky top-0 bg-white/90 backdrop-blur-sm py-4 mb-8 z-10">
             <div className="flex items-center justify-center">
               <div className="flex items-center bg-white rounded-full p-2 shadow-sm border border-slate-200">
-                {/* Step 1 */}
-                <div className={`flex items-center transition-all duration-300 ${
-                  currentStep === 'form' 
-                    ? 'text-blue-600' 
-                    : currentStep === 'ifpug' || currentStep === 'review' 
-                      ? 'text-green-600' 
-                      : 'text-slate-400'
-                }`}>
+                {/* Step 1 - Form */}
+                <div className={`flex items-center transition-all duration-300 text-blue-600`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 ${
                     currentStep === 'form' 
                       ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' 
-                      : currentStep === 'ifpug' || currentStep === 'review'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-slate-100 text-slate-400'
+                      : 'bg-blue-600 text-white'
                   }`}>
-                    {currentStep === 'ifpug' || currentStep === 'review' ? '✓' : '1'}
+                    {currentStep !== 'form' ? <CheckCircle className="h-4 w-4" /> : '1'}
                   </div>
-                  <span className="ml-2 text-sm font-medium hidden sm:inline">Informações</span>
+                  <span className="ml-2 text-sm font-medium hidden sm:inline">Configuração</span>
                 </div>
                 
-                {/* Connector */}
+                {/* Connector 1 */}
                 <div className={`w-8 h-0.5 mx-2 transition-all duration-300 ${
-                  currentStep === 'ifpug' || currentStep === 'review' ? 'bg-green-300' : 'bg-slate-200'
+                  ['preview', 'screens', 'ifpug', 'review'].includes(currentStep) ? 'bg-blue-300' : 'bg-slate-200'
                 }`} />
                 
-                {/* Step 2 */}
+                {/* Step 2 - Preview */}
+                <div className={`flex items-center transition-all duration-300 ${
+                  currentStep === 'preview' 
+                    ? 'text-blue-600' 
+                    : ['screens', 'ifpug', 'review'].includes(currentStep)
+                      ? 'text-blue-600'
+                      : 'text-slate-400'
+                }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 ${
+                    currentStep === 'preview' 
+                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' 
+                      : ['screens', 'ifpug', 'review'].includes(currentStep)
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-400'
+                  }`}>
+                    {['screens', 'ifpug', 'review'].includes(currentStep) ? <CheckCircle className="h-4 w-4" /> : '2'}
+                  </div>
+                  <span className="ml-2 text-sm font-medium hidden sm:inline">Prévia</span>
+                </div>
+                
+                {/* Connector 2 */}
+                <div className={`w-8 h-0.5 mx-2 transition-all duration-300 ${
+                  ['screens', 'ifpug', 'review'].includes(currentStep) ? 'bg-blue-300' : 'bg-slate-200'
+                }`} />
+                
+                {/* Step 3 - Screens */}
+                <div className={`flex items-center transition-all duration-300 ${
+                  currentStep === 'screens' 
+                    ? 'text-blue-600' 
+                    : ['ifpug', 'review'].includes(currentStep)
+                      ? 'text-blue-600'
+                      : 'text-slate-400'
+                }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 ${
+                    currentStep === 'screens' 
+                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' 
+                      : ['ifpug', 'review'].includes(currentStep)
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-400'
+                  }`}>
+                    {['ifpug', 'review'].includes(currentStep) ? <CheckCircle className="h-4 w-4" /> : '3'}
+                  </div>
+                  <span className="ml-2 text-sm font-medium hidden sm:inline">Telas</span>
+                </div>
+                
+                {/* Connector 3 */}
+                <div className={`w-8 h-0.5 mx-2 transition-all duration-300 ${
+                  ['ifpug', 'review'].includes(currentStep) ? 'bg-blue-300' : 'bg-slate-200'
+                }`} />
+                
+                {/* Step 4 - IFPUG */}
                 <div className={`flex items-center transition-all duration-300 ${
                   currentStep === 'ifpug' 
                     ? 'text-blue-600' 
-                    : currentStep === 'review' 
-                      ? 'text-green-600' 
+                    : currentStep === 'review'
+                      ? 'text-blue-600'
                       : 'text-slate-400'
                 }`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 ${
                     currentStep === 'ifpug' 
                       ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' 
                       : currentStep === 'review'
-                        ? 'bg-green-500 text-white'
+                        ? 'bg-blue-600 text-white'
                         : 'bg-slate-100 text-slate-400'
                   }`}>
-                    {currentStep === 'review' ? '✓' : '2'}
+                    {currentStep === 'review' ? <CheckCircle className="h-4 w-4" /> : '4'}
                   </div>
-                  <span className="ml-2 text-sm font-medium hidden sm:inline">Estimativa</span>
+                  <span className="ml-2 text-sm font-medium hidden sm:inline">IFPUG</span>
                 </div>
                 
-                {/* Connector */}
+                {/* Connector 4 */}
                 <div className={`w-8 h-0.5 mx-2 transition-all duration-300 ${
-                  currentStep === 'review' ? 'bg-green-300' : 'bg-slate-200'
+                  currentStep === 'review' ? 'bg-blue-300' : 'bg-slate-200'
                 }`} />
                 
-                {/* Step 3 */}
+                {/* Step 5 - Review */}
                 <div className={`flex items-center transition-all duration-300 ${
                   currentStep === 'review' ? 'text-blue-600' : 'text-slate-400'
                 }`}>
@@ -371,9 +530,9 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                       ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' 
                       : 'bg-slate-100 text-slate-400'
                   }`}>
-                    3
+                    5
                   </div>
-                  <span className="ml-2 text-sm font-medium hidden sm:inline">Revisão</span>
+                  <span className="ml-2 text-sm font-medium hidden sm:inline">PDF Final</span>
                 </div>
               </div>
             </div>
@@ -383,12 +542,12 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-white to-slate-50 rounded-2xl p-6 mb-8 border border-slate-200/60 shadow-sm"
+            className="bg-white rounded-xl p-6 mb-8 border border-slate-200/60 shadow-sm"
           >
-            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
+            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
                   <h2 className="text-2xl font-bold text-slate-800 truncate">{opportunity.title}</h2>
                 </div>
                 <p className="text-slate-600 text-base">Proposta Comercial para <span className="font-semibold text-slate-800">{opportunity.client_name}</span></p>
@@ -400,7 +559,7 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
               </div>
             </div>
             
-            <Separator className="my-5 bg-slate-200/60" />
+            <Separator className="my-6 bg-slate-200/60" />
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="flex items-center gap-3">
@@ -414,12 +573,12 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
               </div>
               
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <Database className="h-5 w-5 text-green-600" />
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Database className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 font-medium">Valor Estimado</p>
-                  <p className="font-bold text-green-700 text-lg">
+                  <p className="font-bold text-slate-700 text-lg">
                     {new Intl.NumberFormat('pt-BR', {
                       style: 'currency',
                       currency: opportunity.currency || 'BRL'
@@ -429,16 +588,16 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
               </div>
               
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <Zap className="h-5 w-5 text-purple-600" />
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Zap className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 font-medium">Probabilidade</p>
                   <div className="flex items-center gap-2">
-                    <p className="font-bold text-purple-700 text-lg">{opportunity.probability}%</p>
+                    <p className="font-bold text-slate-700 text-lg">{opportunity.probability}%</p>
                     <div className="w-12 h-2 bg-slate-200 rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-purple-500 to-purple-600 transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500"
                         style={{ width: `${opportunity.probability}%` }}
                       />
                     </div>
@@ -454,13 +613,13 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-8 pb-6"
+              className="space-y-8 pb-8"
             >
               {/* Service Scope Section */}
               <Card className="border-0 shadow-sm bg-white/60 backdrop-blur-sm">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg font-bold flex items-center gap-3 text-slate-800">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
                       <Database className="h-4 w-4 text-white" />
                     </div>
                     <span>Escopo do Projeto</span>
@@ -486,7 +645,7 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                       <p className="text-slate-500">
                         💡 Inclua módulos, funcionalidades, integrações e requisitos técnicos
                       </p>
-                      <span className={`font-medium ${formData.serviceScope.length > 50 ? 'text-green-600' : 'text-slate-400'}`}>
+                      <span className={`font-medium ${formData.serviceScope.length > 50 ? 'text-blue-600' : 'text-slate-400'}`}>
                         {formData.serviceScope.length} caracteres
                       </span>
                     </div>
@@ -498,13 +657,10 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
               <Card className="border-0 shadow-sm bg-white/60 backdrop-blur-sm">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg font-bold flex items-center gap-3 text-slate-800">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
                       <Package className="h-4 w-4 text-white" />
                     </div>
                     <span>Entregáveis Adicionais</span>
-                    <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                      {formData.deliverables.length} selecionados
-                    </Badge>
                   </CardTitle>
                   <p className="text-sm text-slate-600 mt-1">
                     Selecione serviços complementares para incluir na proposta
@@ -529,9 +685,9 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ duration: 0.3, ease: "easeInOut" }}
                             onClick={() => handleDeliverableChange(option.id, !isSelected)}
-                            className={`group relative p-5 border-2 rounded-2xl transition-all duration-300 cursor-pointer hover:shadow-md ${
+                            className={`group relative p-4 border rounded-xl transition-all duration-300 cursor-pointer hover:shadow-md ${
                               isSelected 
-                                ? 'border-blue-300 bg-gradient-to-br from-blue-50 to-purple-50 shadow-sm' 
+                                ? 'border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100 shadow-sm' 
                                 : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                             }`}
                           >
@@ -539,7 +695,7 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                             <AnimatePresence>
                               {isSelected && (
                                 <motion.div 
-                                  className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg"
+                                  className="absolute -top-2 -right-2 w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center shadow-lg"
                                   initial={{ scale: 0, rotate: -180 }}
                                   animate={{ scale: 1, rotate: 0 }}
                                   exit={{ scale: 0, rotate: 180 }}
@@ -549,8 +705,9 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ delay: 0.1 }}
+                                    className="text-white font-bold"
                                   >
-                                    ✓
+                                    <CheckCircle className="h-3 w-3" />
                                   </motion.div>
                                 </motion.div>
                               )}
@@ -560,7 +717,7 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                               <Checkbox
                                 id={option.id}
                                 checked={isSelected}
-                                className="mt-1 h-5 w-5 rounded-md border-2 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                className="mt-1 h-5 w-5 rounded-md border data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                               />
                               <div className="flex-1 space-y-2">
                                 <div className="flex items-start justify-between gap-3">
@@ -571,7 +728,7 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                                     variant="outline" 
                                     className={`text-sm font-bold shrink-0 ${
                                       isSelected 
-                                        ? 'border-green-400 text-green-800 bg-green-50' 
+                                        ? 'border-blue-300 text-slate-800 bg-blue-50' 
                                         : 'border-slate-300 text-slate-600 bg-slate-50'
                                     }`}
                                   >
@@ -608,10 +765,10 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl"
+                      className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl"
                     >
-                      <div className="flex items-center gap-2 text-green-800">
-                        <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                      <div className="flex items-center gap-2 text-slate-800">
+                        <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
                           <span className="text-white text-xs font-bold">{formData.deliverables.length}</span>
                         </div>
                         <span className="font-medium text-sm">
@@ -627,11 +784,11 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
               <Card className="border-0 shadow-sm bg-white/60 backdrop-blur-sm">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg font-bold flex items-center gap-3 text-slate-800">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
                       <FileText className="h-4 w-4 text-white" />
                     </div>
                     <span>Observações Complementares</span>
-                    <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 bg-amber-50">
+                    <Badge variant="outline" className="text-xs border-slate-300 text-slate-600 bg-slate-50">
                       Opcional
                     </Badge>
                   </CardTitle>
@@ -646,12 +803,255 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                       placeholder="Ex: Premissas do projeto, restrições técnicas, prazos específicos, requisitos de infraestrutura..."
                       value={formData.additionalNotes}
                       onChange={(e) => handleInputChange('additionalNotes', e.target.value)}
-                      className="min-h-[80px] text-base bg-white border-slate-200 focus:border-amber-400 focus:ring-amber-400/20 resize-none"
+                      className="min-h-[80px] text-base bg-white border-slate-200 focus:border-blue-400 focus:ring-blue-400/20 resize-none"
                     />
                     <p className="text-xs text-slate-500">
                       💭 Inclua qualquer informação relevante que possa impactar o desenvolvimento
                     </p>
                   </div>
+
+                  {/* Método de Pagamento */}
+                  <div className="space-y-3 mt-6">
+                    <Label className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center">
+                        <CreditCard className="h-3 w-3 text-white" />
+                      </div>
+                      Método de Pagamento *
+                    </Label>
+                    <Textarea
+                      id="paymentMethod"
+                      placeholder="Ex: 30% na assinatura do contrato, 40% na entrega da primeira versão e 30% na entrega final. Aceita PIX, transferência bancária ou boleto bancário..."
+                      value={formData.paymentMethod}
+                      onChange={(e) => handleInputChange('paymentMethod', e.target.value)}
+                      className="min-h-[80px] text-base bg-white border-slate-200 focus:border-blue-400 focus:ring-blue-400/20 resize-none"
+                    />
+                    <p className="text-xs text-slate-500">
+                      💳 Defina como será o pagamento: parcelamento, formas aceitas, prazos, etc.
+                    </p>
+                  </div>
+
+                  {/* Experiência da Equipe */}
+                  <div className="space-y-3 mt-6">
+                    <Label className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center">
+                        <Users className="h-3 w-3 text-white" />
+                      </div>
+                      Experiência da Equipe
+                    </Label>
+                    <Select value={formData.teamExperience} onValueChange={(value: 'alpha' | 'beta' | 'omega') => handleInputChange('teamExperience', value)}>
+                      <SelectTrigger className="bg-white border-slate-200 focus:border-blue-400 focus:ring-blue-400/20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="alpha">Alpha - Equipe iniciante (R$ 120/PF)</SelectItem>
+                        <SelectItem value="beta">Beta - Experiência moderada (R$ 140/PF)</SelectItem>
+                        <SelectItem value="omega">Omega - Alta experiência (R$ 160/PF)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-500">
+                      A experiência da equipe impacta no preço final. Os pontos de função serão calculados automaticamente pela IA baseado no escopo.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {currentStep === 'preview' && (
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-8 pb-8"
+            >
+              <Card className="border-0 shadow-sm bg-white/60 backdrop-blur-sm">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg font-bold flex items-center gap-3 text-slate-800">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                      <Eye className="h-4 w-4 text-white" />
+                    </div>
+                    <span>Prévia da Proposta</span>
+                  </CardTitle>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Revise a proposta inicial gerada pela IA
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {processedProposal ? (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-blue-50 rounded-lg">
+                        <h4 className="font-semibold text-slate-800 mb-2">Resumo Executivo</h4>
+                        <p className="text-sm text-slate-700">{processedProposal.executiveSummary}</p>
+                      </div>
+                      
+                      <div className="p-4 bg-slate-50 rounded-lg">
+                        <h4 className="font-semibold text-slate-800 mb-2">Pontos de Função Estimados</h4>
+                        <p className="text-sm text-slate-700">
+                          Total: {processedProposal.functionPoints?.total || 0} PF
+                        </p>
+                      </div>
+                      
+                      <div className="p-4 bg-green-50 rounded-lg">
+                        <h4 className="font-semibold text-slate-800 mb-2">Metodologia</h4>
+                        <p className="text-sm text-slate-700">{processedProposal.methodology}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+                      <p className="text-slate-600 mt-2">Carregando prévia...</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {currentStep === 'screens' && (
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-8 pb-8"
+            >
+              <Card className="border-0 shadow-sm bg-white/60 backdrop-blur-sm">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg font-bold flex items-center gap-3 text-slate-800">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                      <Monitor className="h-4 w-4 text-white" />
+                    </div>
+                    <span>Revisão de Telas e Componentes</span>
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">
+                      Aprovação Necessária
+                    </Badge>
+                  </CardTitle>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Revise todas as telas e componentes identificados pela IA antes do cálculo IFPUG
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {detailedComponents ? (
+                    <div className="space-y-6">
+                      {/* Resumo Geral */}
+                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h4 className="font-semibold text-slate-800 mb-2">Resumo da Análise</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-700">{detailedComponents.modules.length}</div>
+                            <div className="text-sm text-slate-600">Módulos</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-700">
+                              {detailedComponents.modules.reduce((acc, module) => acc + module.screens.length, 0)}
+                            </div>
+                            <div className="text-sm text-slate-600">Telas</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-700">{detailedComponents.totalFunctionPoints}</div>
+                            <div className="text-sm text-slate-600">Pontos de Função</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Lista de Módulos */}
+                      <div className="space-y-4">
+                        {detailedComponents.modules.map((module, moduleIndex) => (
+                          <div key={moduleIndex} className="border border-slate-200 rounded-lg p-4">
+                            <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                              <Folder className="h-4 w-4 text-blue-600" />
+                              {module.name}
+                            </h4>
+                            <p className="text-sm text-slate-600 mb-4">{module.description}</p>
+                            
+                            {/* Telas do Módulo */}
+                            {module.screens.length > 0 && (
+                              <div className="mb-4">
+                                <h5 className="font-medium text-slate-700 mb-2 flex items-center gap-2">
+                                  <Monitor className="h-3 w-3 text-blue-500" />
+                                  Telas ({module.screens.length})
+                                </h5>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {module.screens.map((screen, screenIndex) => (
+                                    <div key={screenIndex} className="p-3 bg-slate-50 rounded-lg">
+                                      <div className="flex justify-between items-start">
+                                        <div>
+                                          <p className="font-medium text-sm text-slate-800">{screen.name}</p>
+                                          <p className="text-xs text-slate-600">{screen.description}</p>
+                                        </div>
+                                        <Badge variant="outline" className="text-xs">
+                                          {screen.functionPoints} PF
+                                        </Badge>
+                                      </div>
+                                      {screen.features.length > 0 && (
+                                        <div className="mt-2">
+                                          <p className="text-xs text-slate-500">Funcionalidades:</p>
+                                          <div className="flex flex-wrap gap-1 mt-1">
+                                            {screen.features.slice(0, 3).map((feature, idx) => (
+                                              <span key={idx} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                                {feature}
+                                              </span>
+                                            ))}
+                                            {screen.features.length > 3 && (
+                                              <span className="text-xs text-slate-400">+{screen.features.length - 3} mais</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Componentes do Módulo */}
+                            {module.components.length > 0 && (
+                              <div className="mb-4">
+                                <h5 className="font-medium text-slate-700 mb-2 flex items-center gap-2">
+                                  <Package className="h-3 w-3 text-green-500" />
+                                  Componentes ({module.components.length})
+                                </h5>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {module.components.map((component, compIndex) => (
+                                    <div key={compIndex} className="p-3 bg-green-50 rounded-lg">
+                                      <div className="flex justify-between items-start">
+                                        <div>
+                                          <p className="font-medium text-sm text-slate-800">{component.name}</p>
+                                          <p className="text-xs text-slate-600">{component.description}</p>
+                                        </div>
+                                        <Badge variant="outline" className="text-xs">
+                                          {component.functionPoints} PF
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Ações de Aprovação */}
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center">
+                            <AlertCircle className="h-4 w-4 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-700">Aprovação Necessária</p>
+                            <p className="text-sm text-slate-600">
+                              Revise as telas e componentes acima. Ao aprovar, o cálculo IFPUG será realizado baseado nesta análise.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+                      <p className="text-slate-600 mt-2">Carregando análise de telas...</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
@@ -662,363 +1062,83 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-8 pb-6"
+              className="space-y-8 pb-8"
             >
-              {/* IFPUG Introduction */}
-              <Card className="border-0 shadow-sm bg-gradient-to-br from-indigo-50 to-purple-50 backdrop-blur-sm">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
-                      <Calculator className="h-6 w-6 text-white" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-bold text-slate-800">Estimativa IFPUG</h3>
-                      <p className="text-slate-600 leading-relaxed">
-                        Configure os parâmetros para calcular automaticamente os pontos de função, 
-                        horas estimadas e cronograma do projeto baseado na metodologia IFPUG.
-                      </p>
-                      <div className="flex items-center gap-2 text-sm text-indigo-700 bg-indigo-100 px-3 py-1 rounded-full w-fit">
-                        <span className="font-medium">Cálculo automático baseado em IA</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Function Points Configuration */}
               <Card className="border-0 shadow-sm bg-white/60 backdrop-blur-sm">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg font-bold flex items-center gap-3 text-slate-800">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
-                      <Database className="h-4 w-4 text-white" />
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                      <Calculator className="h-4 w-4 text-white" />
                     </div>
-                    <span>Pontos de Função</span>
-                    <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                      Configuração Base
-                    </Badge>
+                    <span>Análise IFPUG Detalhada</span>
                   </CardTitle>
                   <p className="text-sm text-slate-600 mt-1">
-                    Defina a quantidade de cada tipo de função para o cálculo IFPUG
+                    Revise os componentes detalhados e estimativa final
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[
-                      { key: 'internalLogicalFiles', label: 'Arquivos Lógicos Internos', icon: '📁', color: 'from-orange-500 to-amber-600', description: 'Tabelas, entidades' },
-                      { key: 'externalInterfaceFiles', label: 'Arquivos Interface Externa', icon: '🔗', color: 'from-pink-500 to-rose-600', description: 'APIs, integrações' },
-                      { key: 'externalInputs', label: 'Entradas Externas', icon: '📥', color: 'from-green-500 to-emerald-600', description: 'Formulários, telas de entrada' },
-                      { key: 'externalOutputs', label: 'Saídas Externas', icon: '📤', color: 'from-blue-500 to-cyan-600', description: 'Relatórios, consultas' },
-                      { key: 'externalInquiries', label: 'Consultas Externas', icon: '🔍', color: 'from-purple-500 to-violet-600', description: 'Pesquisas, filtros' }
-                    ].map((item) => (
-                      <motion.div
-                        key={item.key}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="group"
-                      >
-                        <Card className="border-2 border-slate-200 hover:border-slate-300 transition-all duration-300 hover:shadow-md bg-white">
-                          <CardContent className="p-5">
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center text-lg`}>
-                                  {item.icon}
-                                </div>
-                                <div className="flex-1">
-                                  <Label className="font-semibold text-slate-800 text-sm leading-tight">
-                                    {item.label}
-                                  </Label>
-                                  <p className="text-xs text-slate-500 mt-1">
-                                    {item.description}
-                                  </p>
-                                </div>
+                  {detailedComponents && projectEstimate ? (
+                    <div className="space-y-6">
+                      {/* Componentes Detalhados */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 bg-blue-50 rounded-lg">
+                          <h4 className="font-semibold text-slate-800 mb-2">Módulos Identificados</h4>
+                          <p className="text-sm text-slate-700">{detailedComponents.modules.length} módulos</p>
+                          <div className="mt-2 space-y-1">
+                            {detailedComponents.modules.slice(0, 3).map((module, index) => (
+                              <div key={index} className="text-xs text-slate-600">
+                                • {module.name} ({module.functionPoints} PF)
                               </div>
-                              <div className="relative">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  value={formData[item.key as keyof ProposalFormData] as number}
-                                  onChange={(e) => handleInputChange(item.key as keyof ProposalFormData, parseInt(e.target.value) || 0)}
-                                  className="text-center text-lg font-bold border-slate-200 focus:border-blue-400 focus:ring-blue-400/20 bg-slate-50"
-                                  placeholder="0"
-                                />
-                                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                                  <span className="text-xs text-slate-400 font-medium">pts</span>
-                                </div>
+                            ))}
+                            {detailedComponents.modules.length > 3 && (
+                              <div className="text-xs text-slate-500">
+                                +{detailedComponents.modules.length - 3} módulos adicionais
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Adjustment Factors */}
-              <Card className="border-0 shadow-sm bg-white/60 backdrop-blur-sm">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg font-bold flex items-center gap-3 text-slate-800">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                      <Users className="h-4 w-4 text-white" />
-                    </div>
-                    <span>Fatores de Ajuste</span>
-                    <Badge variant="secondary" className="text-xs bg-emerald-100 text-emerald-700">
-                      Complexidade
-                    </Badge>
-                  </CardTitle>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Ajuste a complexidade do projeto para refinar a estimativa
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="space-y-3">
-                      <Label className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-xs">⚙️</div>
-                        Complexidade do Sistema
-                      </Label>
-                      <Select value={formData.complexityFactor} onValueChange={(value: 'low' | 'medium' | 'high') => handleInputChange('complexityFactor', value)}>
-                        <SelectTrigger className="bg-white border-slate-200 focus:border-blue-400 focus:ring-blue-400/20">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">Baixa - Projeto simples</SelectItem>
-                          <SelectItem value="medium">Média - Complexidade padrão</SelectItem>
-                          <SelectItem value="high">Alta - Projeto complexo</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-3">
-                      <Label className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-xs">👥</div>
-                        Experiência da Equipe
-                      </Label>
-                      <Select value={formData.teamExperience} onValueChange={(value: 'junior' | 'pleno' | 'senior') => handleInputChange('teamExperience', value)}>
-                        <SelectTrigger className="bg-white border-slate-200 focus:border-blue-400 focus:ring-blue-400/20">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="junior">Júnior - Equipe iniciante</SelectItem>
-                          <SelectItem value="pleno">Pleno - Experiência moderada</SelectItem>
-                          <SelectItem value="senior">Sênior - Alta experiência</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-3">
-                      <Label className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xs">🔧</div>
-                        Complexidade Tecnológica
-                      </Label>
-                      <Select value={formData.technologyComplexity} onValueChange={(value: 'low' | 'medium' | 'high') => handleInputChange('technologyComplexity', value)}>
-                        <SelectTrigger className="bg-white border-slate-200 focus:border-blue-400 focus:ring-blue-400/20">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">Baixa - Tecnologias conhecidas</SelectItem>
-                          <SelectItem value="medium">Média - Algumas integrações</SelectItem>
-                          <SelectItem value="high">Alta - Múltiplas integrações</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-            {/* Estimativa Calculada */}
-            <AnimatePresence>
-              {projectEstimate && (
-                <motion.div
-                  initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -30, scale: 0.95 }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                >
-                  <Card className="border-0 shadow-lg bg-gradient-to-br from-slate-50 to-blue-50 backdrop-blur-sm overflow-hidden">
-                    <CardHeader className="pb-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                      <CardTitle className="text-xl font-bold flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                          <BarChart3 className="h-5 w-5 text-white" />
+                            )}
+                          </div>
                         </div>
-                        <span>Resultado da Estimativa</span>
-                        <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
-                          Calculado automaticamente
-                        </Badge>
-                      </CardTitle>
-                      <p className="text-blue-100 mt-2">
-                        Estimativa baseada na metodologia IFPUG com fatores de ajuste aplicados
-                      </p>
-                    </CardHeader>
-                    <CardContent className="p-8">
-                      {/* Métricas Principais */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.1 }}
-                          className="text-center"
-                        >
-                          <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 hover:shadow-md transition-all duration-300">
-                            <CardContent className="p-6">
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mx-auto mb-4">
-                                <Target className="h-6 w-6 text-white" />
-                              </div>
-                              <div className="space-y-2">
-                                <p className="text-sm font-medium text-slate-600">Pontos de Função</p>
-                                <p className="text-3xl font-bold text-slate-800">{projectEstimate.functionPoints.adjustedFunctionPoints}</p>
-                                <p className="text-xs text-slate-500">PF ajustados</p>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </motion.div>
-
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.2 }}
-                          className="text-center"
-                        >
-                          <Card className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 hover:shadow-md transition-all duration-300">
-                            <CardContent className="p-6">
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mx-auto mb-4">
-                                <Clock className="h-6 w-6 text-white" />
-                              </div>
-                              <div className="space-y-2">
-                                <p className="text-sm font-medium text-slate-600">Horas Estimadas</p>
-                                <p className="text-3xl font-bold text-slate-800">{projectEstimate.functionPoints.estimatedHours}h</p>
-                                <p className="text-xs text-slate-500">Total do projeto</p>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </motion.div>
-
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.3 }}
-                          className="text-center"
-                        >
-                          <Card className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 hover:shadow-md transition-all duration-300">
-                            <CardContent className="p-6">
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto mb-4">
-                                <Calendar className="h-6 w-6 text-white" />
-                              </div>
-                              <div className="space-y-2">
-                                <p className="text-sm font-medium text-slate-600">Duração</p>
-                                <p className="text-3xl font-bold text-slate-800">{projectEstimate.totalWeeks}</p>
-                                <p className="text-xs text-slate-500">semanas</p>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </motion.div>
-
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.4 }}
-                          className="text-center"
-                        >
-                          <Card className="border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 hover:shadow-md transition-all duration-300">
-                            <CardContent className="p-6">
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mx-auto mb-4">
-                                <TrendingUp className="h-6 w-6 text-white" />
-                              </div>
-                              <div className="space-y-2">
-                                <p className="text-sm font-medium text-slate-600">Timeline</p>
-                                <p className="text-xl font-bold text-slate-800 break-words">{projectEstimate.functionPoints.timeline}</p>
-                                <p className="text-xs text-slate-500">cronograma</p>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </motion.div>
+                        
+                        <div className="p-4 bg-green-50 rounded-lg">
+                          <h4 className="font-semibold text-slate-800 mb-2">Total de Pontos de Função</h4>
+                          <p className="text-2xl font-bold text-slate-800">{detailedComponents.totalFunctionPoints} PF</p>
+                          <p className="text-sm text-slate-600 mt-1">
+                            Baseado na análise detalhada dos componentes
+                          </p>
+                        </div>
                       </div>
 
-                      {/* Distribuição das Fases */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5 }}
-                      >
-                        <Card className="border-2 border-slate-200 bg-white/80 backdrop-blur-sm">
-                          <CardHeader className="pb-4">
-                            <CardTitle className="text-lg font-bold flex items-center gap-3 text-slate-800">
-                              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                                <Clock className="h-4 w-4 text-white" />
-                              </div>
-                              <span>Distribuição das Fases (dias)</span>
-                              <Badge variant="outline" className="text-xs border-indigo-300 text-indigo-700 bg-indigo-50">
-                                Cronograma detalhado
-                              </Badge>
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                              {[
-                                { phase: 'Análise', days: projectEstimate.phases.analysis.days, icon: '🔍', color: 'from-blue-500 to-cyan-600' },
-                                { phase: 'Design', days: projectEstimate.phases.design.days, icon: '🎨', color: 'from-purple-500 to-pink-600' },
-                                { phase: 'Desenvolvimento', days: projectEstimate.phases.development.days, icon: '⚡', color: 'from-emerald-500 to-teal-600' },
-                                { phase: 'Testes', days: projectEstimate.phases.testing.days, icon: '🧪', color: 'from-amber-500 to-orange-600' },
-                                { phase: 'Implantação', days: projectEstimate.phases.deployment.days, icon: '🚀', color: 'from-red-500 to-pink-600' }
-                              ].map((phase, index) => (
-                                <motion.div
-                                  key={phase.phase}
-                                  initial={{ opacity: 0, scale: 0.8 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  transition={{ delay: 0.6 + index * 0.1 }}
-                                  className="text-center"
-                                >
-                                  <Card className="border border-slate-200 hover:border-slate-300 transition-all duration-300 hover:shadow-sm bg-white">
-                                    <CardContent className="p-4">
-                                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${phase.color} flex items-center justify-center mx-auto mb-3 text-lg`}>
-                                        {phase.icon}
-                                      </div>
-                                      <div className="space-y-1">
-                                        <p className="text-sm font-semibold text-slate-800">{phase.phase}</p>
-                                        <p className="text-2xl font-bold text-slate-700">{phase.days}</p>
-                                        <p className="text-xs text-slate-500">dias</p>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                </motion.div>
-                              ))}
+                      {/* Estimativa Final */}
+                      <div className="p-6 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+                        <h4 className="font-bold text-slate-800 mb-4 text-lg">Estimativa Final do Projeto</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-700">
+                              {new Intl.NumberFormat('pt-BR', {
+                                style: 'currency',
+                                currency: 'BRL'
+                              }).format(projectEstimate.totalCost)}
                             </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-
-                      {/* Resumo Visual */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.8 }}
-                        className="mt-6 p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl"
-                      >
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-                            <CheckCircle className="h-4 w-4 text-white" />
+                            <div className="text-sm text-slate-600">Custo Total</div>
                           </div>
-                          <h4 className="font-bold text-green-800">Resumo da Estimativa</h4>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                          <div className="flex items-center gap-2 text-green-700">
-                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                            <span><strong>Total PF:</strong> {projectEstimate.functionPoints.adjustedFunctionPoints} pontos</span>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-700">{projectEstimate.duration} meses</div>
+                            <div className="text-sm text-slate-600">Duração</div>
                           </div>
-                          <div className="flex items-center gap-2 text-green-700">
-                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                            <span><strong>Produtividade:</strong> 8h por PF</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-green-700">
-                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                            <span><strong>Equipe sugerida:</strong> 3-4 pessoas</span>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-700">{projectEstimate.teamSize}</div>
+                            <div className="text-sm text-slate-600">Desenvolvedores</div>
                           </div>
                         </div>
-                      </motion.div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+                      <p className="text-slate-600 mt-2">Calculando estimativa IFPUG...</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </motion.div>
           )}
 
@@ -1030,8 +1150,8 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
             className="space-y-8"
           >
             {/* Header da Revisão */}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-teal-50 backdrop-blur-sm overflow-hidden">
-              <CardHeader className="pb-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+            <Card className="border-0 shadow-lg bg-blue-50 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="pb-4 bg-blue-600 text-white">
                 <CardTitle className="text-xl font-bold flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
                     <Eye className="h-5 w-5 text-white" />
@@ -1041,15 +1161,15 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                     Pronto para gerar
                   </Badge>
                 </CardTitle>
-                <p className="text-emerald-100 mt-2">
+                <p className="text-blue-100 mt-2">
                   Revise todas as informações antes de gerar o documento final da proposta
                 </p>
               </CardHeader>
             </Card>
 
             {/* Conteúdo da Revisão */}
-            <Card className="border-2 border-slate-200 shadow-lg bg-white/80 backdrop-blur-sm overflow-hidden">
-              <CardContent className="p-8">
+            <Card className="border border-slate-200 shadow-lg bg-white/80 backdrop-blur-sm overflow-hidden">
+              <CardContent className="p-6">
                 {isGenerating && !generatedPdf ? (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -1058,10 +1178,10 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                     className="flex flex-col items-center justify-center text-center py-16 space-y-6"
                   >
                     <div className="relative">
-                      <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <div className="w-20 h-20 rounded-3xl bg-blue-600 flex items-center justify-center">
                         <Loader2 className="h-10 w-10 animate-spin text-white" />
                       </div>
-                      <div className="absolute -inset-2 bg-gradient-to-r from-blue-400 to-purple-500 rounded-3xl blur opacity-30 animate-pulse"></div>
+                      <div className="absolute -inset-2 bg-gradient-to-r from-blue-400 to-blue-500 rounded-3xl blur opacity-30 animate-pulse"></div>
                     </div>
                     <div className="space-y-3">
                       <h3 className="text-2xl font-bold text-slate-800">Gerando sua proposta...</h3>
@@ -1072,7 +1192,7 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                     <div className="w-full max-w-md">
                       <div className="w-full bg-slate-200 rounded-full h-3">
                         <motion.div
-                          className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full"
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full"
                           initial={{ width: 0 }}
                           animate={{ width: "100%" }}
                           transition={{ duration: 4, ease: "easeInOut", repeat: Infinity }}
@@ -1091,15 +1211,15 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                     {/* Ícone de Sucesso */}
                     <div className="flex items-center justify-center mb-6">
                       <div className="relative">
-                        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-2xl">
+                        <div className="w-24 h-24 rounded-3xl bg-blue-600 flex items-center justify-center shadow-2xl">
                           <FileText className="h-12 w-12 text-white" />
                         </div>
-                        <div className="absolute -inset-3 bg-gradient-to-r from-green-400 to-emerald-500 rounded-3xl blur opacity-30 animate-pulse"></div>
+                        <div className="absolute -inset-3 bg-gradient-to-r from-blue-400 to-blue-500 rounded-3xl blur opacity-30 animate-pulse"></div>
                         <motion.div
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
                           transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-                          className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg"
+                          className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shadow-lg"
                         >
                           <CheckCircle className="h-4 w-4 text-white" />
                         </motion.div>
@@ -1108,36 +1228,36 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
 
                     {/* Título e Descrição */}
                     <div className="space-y-4">
-                      <h3 className="text-3xl font-bold text-green-800">
+                      <h3 className="text-3xl font-bold text-slate-800">
                         Proposta Gerada com Sucesso!
                       </h3>
-                      <p className="text-lg text-green-700 max-w-2xl mx-auto leading-relaxed">
-                        Sua proposta comercial para <span className="font-bold text-green-800">{opportunity.title}</span> foi gerada e está pronta para ser compartilhada com o cliente.
+                      <p className="text-lg text-slate-700 max-w-2xl mx-auto leading-relaxed">
+                        Sua proposta comercial para <span className="font-bold text-slate-800">{opportunity.title}</span> foi gerada e está pronta para ser compartilhada com o cliente.
                       </p>
                     </div>
 
                     {/* Informações do Documento */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto">
-                      <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl border-2 border-blue-200">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mx-auto mb-3">
+                      <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center mx-auto mb-3">
                           <FileText className="h-5 w-5 text-white" />
                         </div>
                         <p className="text-sm font-semibold text-blue-800">Formato</p>
                         <p className="text-xs text-blue-600 mt-1">PDF Profissional</p>
                       </div>
-                      <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border-2 border-purple-200">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mx-auto mb-3">
+                      <div className="p-4 bg-blue-50 rounded-xl border border-slate-200">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center mx-auto mb-3">
                           <Clock className="h-5 w-5 text-white" />
                         </div>
-                        <p className="text-sm font-semibold text-purple-800">Gerado em</p>
-                        <p className="text-xs text-purple-600 mt-1">{new Date().toLocaleString('pt-BR')}</p>
+                        <p className="text-sm font-semibold text-slate-800">Gerado em</p>
+                        <p className="text-xs text-blue-600 mt-1">{new Date().toLocaleString('pt-BR')}</p>
                       </div>
-                      <div className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border-2 border-emerald-200">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto mb-3">
+                      <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center mx-auto mb-3">
                           <Target className="h-5 w-5 text-white" />
                         </div>
-                        <p className="text-sm font-semibold text-emerald-800">Status</p>
-                        <p className="text-xs text-emerald-600 mt-1">Pronto para envio</p>
+                        <p className="text-sm font-semibold text-slate-800">Status</p>
+                        <p className="text-xs text-slate-600 mt-1">Pronto para envio</p>
                       </div>
                     </div>
 
@@ -1147,7 +1267,7 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                         variant="outline"
                         size="lg"
                         onClick={handlePreviewPdf}
-                        className="flex items-center gap-3 text-base px-8 py-4 border-2 border-blue-300 text-blue-700 hover:bg-blue-50 shadow-md hover:shadow-lg transition-all duration-300"
+                        className="flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-3 border border-blue-300 text-blue-700 hover:bg-blue-50 shadow-md hover:shadow-lg transition-all duration-300 rounded-lg"
                       >
                         <Eye className="h-5 w-5" />
                         Visualizar Documento
@@ -1155,7 +1275,7 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                       <Button
                         size="lg"
                         onClick={handleDownloadPdf}
-                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 flex items-center gap-3 text-base px-8 py-4 shadow-lg hover:shadow-xl transition-all duration-300"
+                        className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-3 shadow-md hover:shadow-lg transition-all duration-300 rounded-lg"
                       >
                         <Download className="h-5 w-5" />
                         Baixar PDF
@@ -1163,14 +1283,14 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
                     </div>
 
                     {/* Dica Adicional */}
-                    <div className="mt-8 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl max-w-lg mx-auto">
+                    <div className="mt-8 p-4 bg-blue-50 border border-slate-200 rounded-xl max-w-lg mx-auto">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
                           <AlertCircle className="h-4 w-4 text-white" />
                         </div>
                         <div className="text-left">
-                          <p className="text-sm font-semibold text-amber-800">Dica Profissional</p>
-                          <p className="text-xs text-amber-700 mt-1">
+                          <p className="text-sm font-semibold text-slate-700">Dica Profissional</p>
+                          <p className="text-xs text-slate-600 mt-1">
                             Revise o documento antes de enviar ao cliente e personalize conforme necessário.
                           </p>
                         </div>
@@ -1182,13 +1302,14 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
             </Card>
           </motion.div>
         )}
+        </div>
 
         {/* Navigation Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 mt-8 border-t-2 border-slate-200 bg-gradient-to-r from-slate-50 to-gray-50 -mx-8 px-8 pb-2"
+          className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 mt-8 border-t border-slate-200 bg-white -mx-6 px-6 pb-6"
         >
           <Button
             variant="ghost"
@@ -1200,21 +1321,21 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
             {currentStep === 'form' ? 'Cancelar' : 'Voltar'}
           </Button>
           
-          <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto order-1 sm:order-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto order-1 sm:order-2">
             {currentStep !== 'review' && (
               <Button
                 onClick={nextStep}
-                disabled={isGenerating || (currentStep === 'form' && !formData.serviceScope.trim())}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white flex items-center gap-2 text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                disabled={isGenerating || (currentStep === 'form' && !canProceedFromForm())}
+                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold w-full sm:w-auto shadow-md hover:shadow-lg transition-all duration-300"
               >
-                {isGenerating && currentStep === 'ifpug' ? (
+                {isGenerating ? (
                   <>
                     <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> 
                     <span>Gerando...</span>
                   </>
                 ) : (
                   <>
-                    <span>{currentStep === 'form' ? 'Próximo Passo' : 'Gerar Proposta'}</span>
+                    <span>Gerar Proposta</span>
                     <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-1" />
                   </>
                 )}
@@ -1225,8 +1346,8 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
               <Button
                 variant="outline"
                 onClick={handlePreview}
-                disabled={isGenerating || !formData.serviceScope.trim()}
-                className="flex items-center gap-2 text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold w-full sm:w-auto border-2 border-blue-300 text-blue-700 hover:bg-blue-50 shadow-md hover:shadow-lg transition-all duration-300"
+                disabled={isGenerating || !canProceedFromForm()}
+                className="flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold w-full sm:w-auto border border-blue-300 text-blue-700 hover:bg-blue-50 shadow-md hover:shadow-lg transition-all duration-300"
               >
                 {isGenerating ? (
                   <>
@@ -1246,7 +1367,7 @@ export function GenerateProposalModal({ isOpen, onClose, opportunity }: Generate
               <Button
                 onClick={handleClose}
                 size="lg"
-                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-sm sm:text-base font-semibold w-full sm:w-auto px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-base font-semibold w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Concluir e Fechar

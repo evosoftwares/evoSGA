@@ -245,3 +245,83 @@ export interface SalesMetricsHistory {
   new_value?: string;
   changed_at: string;
 }
+
+// Sales Proposals Types
+export interface SalesProposal {
+  id: string;
+  opportunity_id: string;
+  
+  // Proposal metadata
+  title: string;
+  version: number;
+  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected';
+  
+  // Proposal content from AI generation
+  executive_summary?: string;
+  project_scope?: string;
+  deliverables?: string[];
+  timeline?: string;
+  investment_text?: string;
+  terms?: string;
+  next_steps?: string;
+  
+  // IFPUG calculation data
+  function_points?: any; // JSON object with function points analysis
+  project_estimate?: any; // JSON object with project estimate
+  
+  // Team and pricing data
+  team_experience: 'alpha' | 'beta' | 'omega';
+  price_per_function_point?: number;
+  total_price?: number;
+  
+  // PDF storage
+  pdf_url?: string;
+  pdf_filename?: string;
+  
+  // Tracking
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  sent_at?: string;
+  viewed_at?: string;
+  responded_at?: string;
+}
+
+export interface ProposalDeliverable {
+  id: string;
+  proposal_id: string;
+  deliverable_id: string;
+  title: string;
+  description?: string;
+  price?: string;
+  details?: string;
+  selected: boolean;
+  created_at: string;
+}
+
+export interface ProposalActivityLog {
+  id: string;
+  proposal_id: string;
+  user_id?: string;
+  activity_type: 'created' | 'updated' | 'sent' | 'viewed' | 'downloaded' | 'accepted' | 'rejected' | 'deleted' | 'status_changed';
+  description?: string;
+  metadata?: any; // JSON object with additional activity data
+  created_at: string;
+}
+
+export interface ProposalSummary {
+  id: string;
+  title: string;
+  version: number;
+  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected';
+  total_price?: number;
+  team_experience: 'alpha' | 'beta' | 'omega';
+  created_at: string;
+  sent_at?: string;
+  viewed_at?: string;
+  opportunity_title?: string;
+  client_name?: string;
+  client_company?: string;
+  created_by_name?: string;
+  deliverable_count?: number;
+}
