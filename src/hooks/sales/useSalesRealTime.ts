@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { realtimeManager } from '@/services/realtimeManager';
 import { SALES_QUERY_KEYS } from './useSalesKanbanData';
 import { SALES_COMMENTS_QUERY_KEYS } from './useSalesComments';
 
@@ -15,104 +15,46 @@ export const useSalesRealTime = ({ projectId, enabled = true }: UseSalesRealTime
   useEffect(() => {
     if (!enabled) return;
 
-    // Subscribe to sales opportunities changes
-    const opportunitiesSubscription = supabase
-      .channel('sales_opportunities_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sales_opportunities',
-          filter: projectId ? `project_id=eq.${projectId}` : undefined,
-        },
-        (payload) => {
+    const subscriptionConfigs = [
+      {
+        table: 'sales_opportunities',
+        filter: projectId ? { filter: `project_id=eq.${projectId}` } : undefined,
+        callback: (payload: any) => {
           console.log('Sales opportunity change:', payload);
-          
-          // Invalidate relevant queries
           queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesKanban(projectId) });
           queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesOpportunities(projectId) });
         }
-      )
-      .subscribe();
-
-    // Subscribe to sales columns changes
-    const columnsSubscription = supabase
-      .channel('sales_columns_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sales_columns',
-        },
-        (payload) => {
+      },
+      {
+        table: 'sales_columns',
+        callback: (payload: any) => {
           console.log('Sales column change:', payload);
-          
-          // Invalidate relevant queries
           queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesKanban(projectId) });
           queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesColumns });
         }
-      )
-      .subscribe();
-
-    // Subscribe to sales tags changes
-    const tagsSubscription = supabase
-      .channel('sales_tags_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sales_tags',
-        },
-        (payload) => {
+      },
+      {
+        table: 'sales_tags',
+        callback: (payload: any) => {
           console.log('Sales tag change:', payload);
-          
-          // Invalidate relevant queries
           queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesKanban(projectId) });
           queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesTags });
         }
-      )
-      .subscribe();
-
-    // Subscribe to opportunity tags changes
-    const opportunityTagsSubscription = supabase
-      .channel('sales_opportunity_tags_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sales_opportunity_tags',
-        },
-        (payload) => {
+      },
+      {
+        table: 'sales_opportunity_tags',
+        callback: (payload: any) => {
           console.log('Sales opportunity tag change:', payload);
-          
-          // Invalidate relevant queries
           queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesKanban(projectId) });
           queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesOpportunityTags });
         }
-      )
-      .subscribe();
-
-    // Subscribe to sales comments changes
-    const commentsSubscription = supabase
-      .channel('sales_comments_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sales_comments',
-        },
-        (payload) => {
+      },
+      {
+        table: 'sales_comments',
+        callback: (payload: any) => {
           console.log('Sales comment change:', payload);
-          
-          // Invalidate comment-related queries
           queryClient.invalidateQueries({ queryKey: SALES_COMMENTS_QUERY_KEYS.salesCommentCounts });
           
-          // If we have the opportunity_id, invalidate specific comments
           if (payload.new && 'opportunity_id' in payload.new) {
             queryClient.invalidateQueries({ 
               queryKey: SALES_COMMENTS_QUERY_KEYS.salesComments(payload.new.opportunity_id as string) 
@@ -124,41 +66,24 @@ export const useSalesRealTime = ({ projectId, enabled = true }: UseSalesRealTime
             });
           }
         }
-      )
-      .subscribe();
-
-    // Subscribe to sales activities changes
-    const activitiesSubscription = supabase
-      .channel('sales_activities_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sales_activities',
-        },
-        (payload) => {
+      },
+      {
+        table: 'sales_activities',
+        callback: (payload: any) => {
           console.log('Sales activity change:', payload);
-          
-          // Invalidate activity-related queries
           // Add specific query keys when activity hooks are implemented
         }
-      )
-      .subscribe();
+      }
+    ];
 
-    // Cleanup function
+    const channelKey = realtimeManager.subscribe('sales', subscriptionConfigs, projectId);
+
     return () => {
-      opportunitiesSubscription.unsubscribe();
-      columnsSubscription.unsubscribe();
-      tagsSubscription.unsubscribe();
-      opportunityTagsSubscription.unsubscribe();
-      commentsSubscription.unsubscribe();
-      activitiesSubscription.unsubscribe();
+      realtimeManager.unsubscribe(channelKey);
     };
   }, [queryClient, projectId, enabled]);
 
-  // Return subscription status
   return {
-    isConnected: true, // You could track actual connection status if needed
+    isConnected: true,
   };
 };

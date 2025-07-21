@@ -5,7 +5,7 @@ import { realtimeStatusManager } from './realtimeStatusManager';
 
 const logger = createLogger('RealtimeManager');
 
-type SubscriptionType = 'tasks' | 'tags' | 'projects' | 'comments';
+type SubscriptionType = 'tasks' | 'tags' | 'projects' | 'comments' | 'sales' | 'files';
 
 interface SubscriptionConfig {
   table: string;

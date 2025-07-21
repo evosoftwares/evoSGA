@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
-import { DollarSign, User, MessageCircle, Tag, Calendar, TrendingUp, Phone, Mail, Building2 } from 'lucide-react';
+import { DollarSign, User, MessageCircle, Tag, Calendar, TrendingUp, Phone, Mail, Building2, FileText } from 'lucide-react';
 import { SalesOpportunity, Profile, Project, SalesTag, SalesColumn } from '@/types/database';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ProjectBadge } from '@/components/projects/ProjectBadge';
+import { GenerateProposalModal } from './GenerateProposalModal';
 
 interface OpportunityCardProps {
   opportunity: SalesOpportunity;
@@ -28,6 +30,8 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
   columns,
   commentCounts
 }) => {
+  const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
+
   // Encontrar o responsável
   const assignee = teamMembers.find(member => member.id === opportunity.assignee);
   const assigneeName = assignee ? assignee.name : null;
@@ -46,6 +50,10 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
   const isClosedLost = currentColumn?.title?.toLowerCase().includes('perdido') || 
                        currentColumn?.title?.toLowerCase().includes('lost');
   const isClosed = isClosedWon || isClosedLost;
+
+  // Verificar se está na coluna "Proposta"
+  const isProposalColumn = currentColumn?.title?.toLowerCase().includes('proposta') || 
+                          currentColumn?.title?.toLowerCase().includes('proposal');
 
   // Contagem de comentários
   const commentCount = commentCounts[opportunity.id] || 0;
@@ -79,7 +87,19 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
     return 'text-red-700 bg-red-50 border-red-200';
   };
 
+  // Handler para abrir modal de proposta
+  const handleGenerateProposal = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Evita que o clique abra o modal de detalhes
+    setIsProposalModalOpen(true);
+  };
+
+  // Handler para fechar modal de proposta
+  const handleCloseProposalModal = () => {
+    setIsProposalModalOpen(false);
+  };
+
   return (
+    <>
     <Draggable draggableId={opportunity.id} index={index} isDragDisabled={isClosed}>
       {(provided, snapshot) => (
         <div
@@ -242,16 +262,31 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
               </div>
 
               {/* Responsável à direita */}
-              {assigneeName && (
-                <div className={`flex items-center gap-2 text-xs bg-gradient-to-r from-gray-50 to-gray-100 px-3 py-1.5 rounded-full ${
-                  isClosed ? 'text-gray-500' : 'text-gray-700'
-                }`}>
-                  <div className="w-6 h-6 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full flex items-center justify-center shadow-sm">
-                    <User className="w-3 h-3 text-white" />
+              <div className="flex items-center gap-2">
+                {/* Botão de Gerar Proposta - apenas para coluna "Proposta" */}
+                {isProposalColumn && !isClosed && (
+                  <Button
+                    onClick={handleGenerateProposal}
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-700 hover:from-blue-100 hover:to-indigo-100 hover:border-blue-300 transition-all duration-200"
+                  >
+                    <FileText className="w-3 h-3 mr-1" />
+                    Gerar Proposta
+                  </Button>
+                )}
+
+                {assigneeName && (
+                  <div className={`flex items-center gap-2 text-xs bg-gradient-to-r from-gray-50 to-gray-100 px-3 py-1.5 rounded-full ${
+                    isClosed ? 'text-gray-500' : 'text-gray-700'
+                  }`}>
+                    <div className="w-6 h-6 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full flex items-center justify-center shadow-sm">
+                      <User className="w-3 h-3 text-white" />
+                    </div>
+                    <span className="font-semibold max-w-20 truncate">{assigneeName}</span>
                   </div>
-                  <span className="font-semibold max-w-20 truncate">{assigneeName}</span>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Indicador visual de oportunidade fechada */}
@@ -276,6 +311,14 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
         </div>
       )}
     </Draggable>
+
+    {/* Modal de Geração de Proposta */}
+    <GenerateProposalModal
+      isOpen={isProposalModalOpen}
+      onClose={handleCloseProposalModal}
+      opportunity={opportunity}
+    />
+  </>
   );
 };
 

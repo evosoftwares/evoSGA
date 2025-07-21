@@ -2,10 +2,12 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { AuthContextType, Profile } from '@/types/auth';
+import { Profile, AuthContextType } from '@/types/auth';
 import { createLogger } from '@/utils/logger';
+import { authErrorHandler } from '@/services/authErrorHandler';
+import { useNavigate } from 'react-router-dom';
 
-const logger = createLogger('AUTH');
+const logger = createLogger('AuthContext');
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -29,18 +31,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         logger.error('Error fetching profile', error);
+        
+        // Verifica se é erro de autenticação
+        await authErrorHandler.handleAuthError(error, 'fetchProfile');
         return null;
       }
 
       if (profileData) {
-        logger.debug('Profile found', profileData);
-        setProfile(profileData as Profile);
+        logger.debug('Profile found:', profileData.name);
         return profileData as Profile;
+      } else {
+        logger.debug('No profile found for user');
+        return null;
       }
-
-      return null;
     } catch (err) {
-      logger.error('Profile fetch failed', err);
+      logger.error('Exception fetching profile', err);
+      await authErrorHandler.handleAuthError(err, 'fetchProfile');
       return null;
     }
   };
@@ -77,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {
       logger.error('Error handling auth user', err);
+      await authErrorHandler.handleAuthError(err, 'handleAuthUser');
       setProfile(null);
     } finally {
       clearTimeout(handleTimeout);
@@ -93,6 +100,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     initializingRef.current = true;
+
+    // Configura o callback de redirecionamento para o handler de erros
+    authErrorHandler.setRedirectCallback(() => {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth';
+      }
+    });
+
+    // Inicia o monitoramento de erros de autenticação
+    authErrorHandler.startMonitoring();
 
     const initializeAuth = async () => {
       // Force loading to false after timeout to prevent infinite loading
@@ -112,6 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (error) {
           logger.error('Error getting session', error);
+          await authErrorHandler.handleAuthError(error, 'getSession');
           // Não retornar aqui, continuar o processo
         }
 
@@ -125,6 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               await handleAuthUser(currentSession.user);
             } catch (userError) {
               logger.error('Error handling auth user during initialization', userError);
+              await authErrorHandler.handleAuthError(userError, 'initializeAuth');
               setLoading(false);
             }
           } else {
@@ -133,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (err) {
         logger.error('Initialization error', err);
+        await authErrorHandler.handleAuthError(err, 'initializeAuth');
         if (mounted) {
           setLoading(false);
           setInitialized(true);
@@ -158,6 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         logger.error(`[AUTH] Error handling user on ${event} event`, error);
+        await authErrorHandler.handleAuthError(error, `onAuthStateChange_${event}`);
         setProfile(null);
       } finally {
         // ESSENCIAL: Garante que o loading seja finalizado em todos os casos
@@ -186,16 +207,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
         logger.error('Sign in error from Supabase:', error);
+        
+        // IMPORTANTE: Definir loading como false em caso de erro
+        setLoading(false);
+        
+        // Trata especificamente erros de credenciais inválidas
+        if (error.message === 'Invalid login credentials') {
+          // Este é um erro esperado, não precisa redirecionar
+          return { error };
+        }
+        
+        // Para outros erros de autenticação, pode ser necessário redirecionar
+        await authErrorHandler.handleAuthError(error, 'signIn');
         return { error };
       }
       
       logger.debug('Sign in successful:', data.user?.email);
+      // Para sucesso, deixar o onAuthStateChange cuidar do loading
       return { error: null };
     } catch (err: any) {
       logger.error('Sign in exception:', err);
+      
+      // IMPORTANTE: Definir loading como false em caso de exceção
+      setLoading(false);
+      
+      await authErrorHandler.handleAuthError(err, 'signIn');
       return { error: err };
-    } finally {
-      // Não definir loading como false aqui, deixar o onAuthStateChange cuidar disso
     }
   };
 
@@ -214,9 +251,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
 
+      if (error) {
+        await authErrorHandler.handleAuthError(error, 'signUp');
+      }
+
       return { error };
     } catch (err: any) {
       logger.error('Sign up error', err);
+      await authErrorHandler.handleAuthError(err, 'signUp');
       return { error: err };
     }
   };
@@ -230,10 +272,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(null);
         setInitialized(false);
         initializingRef.current = false;
+      } else {
+        await authErrorHandler.handleAuthError(error, 'signOut');
       }
       return { error };
     } catch (err: any) {
       logger.error('Sign out error', err);
+      await authErrorHandler.handleAuthError(err, 'signOut');
       return { error: err };
     }
   };

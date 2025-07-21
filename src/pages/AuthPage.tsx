@@ -3,11 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import LoginForm from '@/components/auth/LoginForm';
-import SignUpForm from '@/components/auth/SignUpForm';
 import InitialUsersSetup from '@/components/admin/InitialUsersSetup';
 
 const AuthPage: React.FC = () => {
-  const [isLoginMode, setIsLoginMode] = useState(true);
   const [showSetup, setShowSetup] = useState(false);
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -18,10 +16,6 @@ const AuthPage: React.FC = () => {
       navigate('/');
     }
   }, [user, loading, navigate]);
-
-  const toggleMode = () => {
-    setIsLoginMode(!isLoginMode);
-  };
 
   if (loading) {
     return (
@@ -69,11 +63,7 @@ const AuthPage: React.FC = () => {
           </div>
         ) : (
           <div>
-            {isLoginMode ? (
-              <LoginForm onToggleMode={toggleMode} />
-            ) : (
-              <SignUpForm onToggleMode={toggleMode} />
-            )}
+            <LoginForm />
             
             <div className="text-center mt-6">
               <button

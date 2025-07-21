@@ -2,6 +2,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { authErrorHandler } from '@/services/authErrorHandler';
+import { createLogger } from '@/utils/logger';
+
+const logger = createLogger('ProtectedRoute');
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -13,8 +17,17 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const [forceLoadingOff, setForceLoadingOff] = useState(false);
 
   useEffect(() => {
+    // Configura o callback de redirecionamento para usar o navigate do React Router
+    authErrorHandler.setRedirectCallback(() => {
+      logger.info('Redirecting to auth page due to authentication error');
+      navigate('/auth', { replace: true });
+    });
+  }, [navigate]);
+
+  useEffect(() => {
     if (!loading && !user) {
-      navigate('/auth');
+      logger.info('No authenticated user found, redirecting to auth');
+      navigate('/auth', { replace: true });
     }
   }, [user, loading, navigate]);
 
@@ -22,13 +35,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   useEffect(() => {
     if (loading) {
       const timeout = setTimeout(() => {
-        console.warn('ProtectedRoute: Loading timeout - forcing off');
+        logger.warn('ProtectedRoute: Loading timeout - forcing off');
         setForceLoadingOff(true);
       }, 10000); // 10 second timeout
       
       return () => clearTimeout(timeout);
     }
   }, [loading]);
+
+  // If loading was forced off and no user, redirect to auth
+  useEffect(() => {
+    if (forceLoadingOff && !user) {
+      logger.warn('Loading forced off with no user, redirecting to auth');
+      navigate('/auth', { replace: true });
+    }
+  }, [forceLoadingOff, user, navigate]);
 
   if (loading && !forceLoadingOff) {
     return (
@@ -39,12 +60,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         </div>
       </div>
     );
-  }
-
-  // If loading was forced off and no user, redirect to auth
-  if (forceLoadingOff && !user) {
-    navigate('/auth');
-    return null;
   }
 
   if (!user) {

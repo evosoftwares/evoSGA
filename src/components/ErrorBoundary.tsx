@@ -1,102 +1,126 @@
-import React, { Component, ReactNode } from 'react';
-import { createLogger } from '@/utils/logger';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-
-const logger = createLogger('ErrorBoundary');
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { authErrorHandler } from '@/services/authErrorHandler';
 
 interface Props {
   children: ReactNode;
-  fallback?: ReactNode;
-  name?: string;
 }
 
 interface State {
   hasError: boolean;
-  error?: Error;
-  errorInfo?: React.ErrorInfo;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
-export class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false };
+class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null
+  };
+
+  public static getDerivedStateFromError(error: Error): State {
+    return {
+      hasError: true,
+      error,
+      errorInfo: null
+    };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    logger.error(`Error caught by boundary ${this.props.name || 'Unknown'}`, {
-      error: error.message,
-      stack: error.stack,
-      componentStack: errorInfo.componentStack
-    });
-
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    
     this.setState({
       error,
       errorInfo
     });
+
+    // Verifica se é erro de autenticação
+    if (authErrorHandler.isAuthError(error)) {
+      authErrorHandler.handleAuthError(error, 'ErrorBoundary');
+    }
   }
 
-  handleReload = () => {
-    this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+  private handleReload = () => {
+    window.location.reload();
   };
 
-  render() {
+  private handleGoHome = () => {
+    window.location.href = '/';
+  };
+
+  private handleGoToAuth = () => {
+    window.location.href = '/auth';
+  };
+
+  public render() {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
+      const isAuthError = this.state.error && authErrorHandler.isAuthError(this.state.error);
 
       return (
-        <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-            <AlertTriangle className="w-8 h-8 text-red-600" />
-          </div>
-          
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Algo deu errado
-          </h2>
-          
-          <p className="text-gray-600 mb-6 max-w-md">
-            Ocorreu um erro inesperado nesta seção da aplicação. 
-            {this.props.name && ` Componente: ${this.props.name}`}
-          </p>
+        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <CardTitle className="text-xl text-gray-900">
+                {isAuthError ? 'Erro de Autenticação' : 'Algo deu errado'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <p className="text-gray-600">
+                {isAuthError 
+                  ? 'Sua sessão expirou ou há um problema com sua autenticação. Por favor, faça login novamente.'
+                  : 'Ocorreu um erro inesperado. Tente recarregar a página ou voltar ao início.'
+                }
+              </p>
+              
+              <div className="space-y-2">
+                {isAuthError ? (
+                  <Button 
+                    onClick={this.handleGoToAuth}
+                    className="w-full"
+                  >
+                    <Home className="w-4 h-4 mr-2" />
+                    Ir para Login
+                  </Button>
+                ) : (
+                  <>
+                    <Button 
+                      onClick={this.handleReload}
+                      className="w-full"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Recarregar Página
+                    </Button>
+                    <Button 
+                      onClick={this.handleGoHome}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Home className="w-4 h-4 mr-2" />
+                      Voltar ao Início
+                    </Button>
+                  </>
+                )}
+              </div>
 
-          <div className="space-y-3">
-            <Button 
-              onClick={this.handleReload}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Tentar Novamente
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              onClick={() => window.location.reload()}
-              className="flex items-center gap-2"
-            >
-              Recarregar Página
-            </Button>
-          </div>
-
-          {process.env.NODE_ENV === 'development' && this.state.error && (
-            <details className="mt-6 p-4 bg-gray-100 rounded-lg text-left max-w-2xl">
-              <summary className="cursor-pointer font-medium text-gray-700 mb-2">
-                Detalhes do Erro (Desenvolvimento)
-              </summary>
-              <pre className="text-xs text-red-600 whitespace-pre-wrap">
-                {this.state.error.message}
-                {'\n\n'}
-                {this.state.error.stack}
-                {this.state.errorInfo?.componentStack && '\n\nComponent Stack:'}
-                {this.state.errorInfo?.componentStack}
-              </pre>
-            </details>
-          )}
+              {process.env.NODE_ENV === 'development' && this.state.error && (
+                <details className="mt-4 text-left">
+                  <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700">
+                    Detalhes do erro (desenvolvimento)
+                  </summary>
+                  <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">
+                    {this.state.error.toString()}
+                    {this.state.errorInfo?.componentStack}
+                  </pre>
+                </details>
+              )}
+            </CardContent>
+          </Card>
         </div>
       );
     }

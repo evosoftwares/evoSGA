@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, DollarSign, Calendar, Percent, User, Building2, Phone, Mail, Plus, Tag } from 'lucide-react';
+import { X, DollarSign, Calendar, Percent, User, Building2, Phone, Mail, Plus, Tag, Settings } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { SalesOpportunity, SalesTag, SalesOpportunityTag, Project, Profile, SalesColumn } from '@/types/database';
+import DeleteOpportunityConfirmationModal from './DeleteOpportunityConfirmationModal';
+import SalesTagManager from './SalesTagManager';
 
 interface OpportunityDetailModalProps {
   opportunity: SalesOpportunity;
@@ -41,6 +43,8 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
   const [editData, setEditData] = useState<Partial<SalesOpportunity>>({});
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [selectedTagToAdd, setSelectedTagToAdd] = useState('');
+  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
 
   const handleEdit = () => {
     setEditData({
@@ -49,25 +53,39 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
       deal_value: opportunity.deal_value,
       probability: opportunity.probability,
       expected_close_date: opportunity.expected_close_date,
+      source: opportunity.source,
       client_name: opportunity.client_name,
       client_email: opportunity.client_email,
       client_phone: opportunity.client_phone,
       client_company: opportunity.client_company,
-      source: opportunity.source,
       assignee: opportunity.assignee,
     });
     setIsEditing(true);
   };
 
   const handleSave = async () => {
-    await onUpdate(editData);
-    setIsEditing(false);
-    setEditData({});
+    try {
+      await onUpdate(editData);
+      setIsEditing(false);
+      setEditData({});
+    } catch (error) {
+      console.error('Failed to update opportunity:', error);
+    }
   };
 
   const handleCancel = () => {
     setIsEditing(false);
     setEditData({});
+  };
+
+  const handleDeleteClick = () => {
+    setIsDeleteConfirmationOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    await onDelete();
+    setIsDeleteConfirmationOpen(false);
+    onClose();
   };
 
   const formatCurrency = (value: number, currency: string = 'BRL') => {
@@ -125,37 +143,38 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span className="text-xl font-bold text-gray-900">
-              {isEditing ? 'Editando Oportunidade' : 'Detalhes da Oportunidade'}
-            </span>
-            <div className="flex items-center gap-2">
-              {!isEditing && (
-                <>
-                  <Button variant="outline" size="sm" onClick={handleEdit}>
-                    Editar
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={onDelete}>
-                    Excluir
-                  </Button>
-                </>
-              )}
-              {isEditing && (
-                <>
-                  <Button variant="default" size="sm" onClick={handleSave}>
-                    Salvar
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleCancel}>
-                    Cancelar
-                  </Button>
-                </>
-              )}
-            </div>
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span className="text-xl font-bold text-gray-900">
+                {isEditing ? 'Editando Oportunidade' : 'Detalhes da Oportunidade'}
+              </span>
+              <div className="flex items-center gap-2">
+                {!isEditing && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={handleEdit}>
+                      Editar
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={handleDeleteClick}>
+                      Excluir
+                    </Button>
+                  </>
+                )}
+                {isEditing && (
+                  <>
+                    <Button variant="default" size="sm" onClick={handleSave}>
+                      Salvar
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleCancel}>
+                      Cancelar
+                    </Button>
+                  </>
+                )}
+              </div>
+            </DialogTitle>
+          </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6 p-4">
           {/* Main Content */}
@@ -387,17 +406,28 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
             <div className="bg-white p-3 rounded-lg border border-gray-200">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-semibold text-gray-900">Tags</h4>
-                {!isEditing && onAddTag && availableTags.length > 0 && (
+                <div className="flex items-center gap-1">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    onClick={() => setIsAddingTag(true)}
-                    className="h-7 px-2"
+                    onClick={() => setIsTagManagerOpen(true)}
+                    className="h-7 px-2 text-gray-600 hover:text-gray-900"
+                    title="Gerenciar Tags"
                   >
-                    <Plus className="w-3 h-3 mr-1" />
-                    Adicionar
+                    <Settings className="w-3 h-3" />
                   </Button>
-                )}
+                  {!isEditing && onAddTag && availableTags.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsAddingTag(true)}
+                      className="h-7 px-2"
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Adicionar
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Add Tag Select */}
@@ -506,6 +536,20 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
         </div>
       </DialogContent>
     </Dialog>
+
+      <DeleteOpportunityConfirmationModal
+        opportunity={opportunity}
+        isOpen={isDeleteConfirmationOpen}
+        onClose={() => setIsDeleteConfirmationOpen(false)}
+        onConfirm={handleDeleteConfirm}
+      />
+
+      <SalesTagManager
+        isOpen={isTagManagerOpen}
+        onClose={() => setIsTagManagerOpen(false)}
+        tags={tags}
+      />
+    </>
   );
 };
 

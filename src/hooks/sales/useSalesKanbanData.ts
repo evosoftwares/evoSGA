@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { SalesColumn, SalesOpportunity, SalesTag, SalesOpportunityTag, Profile } from '@/types/database';
+import { useAuthenticatedRequest } from '@/hooks/useAuthenticatedRequest';
 
 interface SalesKanbanData {
   columns: SalesColumn[];
@@ -19,9 +20,11 @@ const SALES_QUERY_KEYS = {
 } as const;
 
 export const useSalesKanbanData = (projectId?: string) => {
+  const { executeRequest } = useAuthenticatedRequest();
+
   return useQuery<SalesKanbanData>({
     queryKey: SALES_QUERY_KEYS.salesKanban(projectId),
-    queryFn: async () => {
+    queryFn: () => executeRequest(async () => {
       console.log('🔄 [SALES] Starting sales data fetch for project:', projectId);
       // Fetch all data in parallel for better performance
       const [
@@ -50,15 +53,14 @@ export const useSalesKanbanData = (projectId?: string) => {
               .order('position', { ascending: true }),
 
         // Fetch sales tags
-        supabase
-          .from('sales_tags')
-          .select('*')
-          .order('name', { ascending: true }),
+        projectId
+          ? supabase.from('sales_tags').select('*').eq('project_id', projectId).order('name', { ascending: true })
+          : supabase.from('sales_tags').select('*').order('name', { ascending: true }),
 
-        // Fetch opportunity-tag relationships
-        supabase
-          .from('sales_opportunity_tags')
-          .select('*'),
+        // Opportunity Tags com filtro (assumindo campo project_id em opportunities para join indireto; ajuste se necessário)
+        projectId
+          ? supabase.from('sales_opportunity_tags').select('*, sales_opportunities(project_id)').match({ 'sales_opportunities.project_id': projectId })
+          : supabase.from('sales_opportunity_tags').select('*'),
 
         // Fetch active profiles
         supabase
@@ -105,7 +107,7 @@ export const useSalesKanbanData = (projectId?: string) => {
         opportunityTags: opportunityTagsResult.data || [],
         profiles: profilesResult.data || []
       };
-    },
+    }, 'useSalesKanbanData'),
     staleTime: 30000, // 30 seconds
     gcTime: 300000, // 5 minutes
   });
@@ -113,9 +115,11 @@ export const useSalesKanbanData = (projectId?: string) => {
 
 // Hook for sales columns only
 export const useSalesColumns = () => {
+  const { executeRequest } = useAuthenticatedRequest();
+
   return useQuery<SalesColumn[]>({
     queryKey: SALES_QUERY_KEYS.salesColumns,
-    queryFn: async () => {
+    queryFn: () => executeRequest(async () => {
       const { data, error } = await supabase
         .from('sales_columns')
         .select('*')
@@ -123,16 +127,18 @@ export const useSalesColumns = () => {
 
       if (error) throw error;
       return data || [];
-    },
+    }, 'useSalesColumns'),
     staleTime: 60000, // 1 minute
   });
 };
 
 // Hook for sales opportunities
 export const useSalesOpportunities = (projectId?: string) => {
+  const { executeRequest } = useAuthenticatedRequest();
+
   return useQuery<SalesOpportunity[]>({
     queryKey: SALES_QUERY_KEYS.salesOpportunities(projectId),
-    queryFn: async () => {
+    queryFn: () => executeRequest(async () => {
       let query = supabase
         .from('sales_opportunities')
         .select('*')
@@ -146,16 +152,18 @@ export const useSalesOpportunities = (projectId?: string) => {
 
       if (error) throw error;
       return data || [];
-    },
+    }, 'useSalesOpportunities'),
     staleTime: 30000, // 30 seconds
   });
 };
 
 // Hook for sales tags
 export const useSalesTags = () => {
+  const { executeRequest } = useAuthenticatedRequest();
+
   return useQuery<SalesTag[]>({
     queryKey: SALES_QUERY_KEYS.salesTags,
-    queryFn: async () => {
+    queryFn: () => executeRequest(async () => {
       const { data, error } = await supabase
         .from('sales_tags')
         .select('*')
@@ -163,23 +171,25 @@ export const useSalesTags = () => {
 
       if (error) throw error;
       return data || [];
-    },
+    }, 'useSalesTags'),
     staleTime: 60000, // 1 minute
   });
 };
 
 // Hook for opportunity tags relationships
 export const useSalesOpportunityTags = () => {
+  const { executeRequest } = useAuthenticatedRequest();
+
   return useQuery<SalesOpportunityTag[]>({
     queryKey: SALES_QUERY_KEYS.salesOpportunityTags,
-    queryFn: async () => {
+    queryFn: () => executeRequest(async () => {
       const { data, error } = await supabase
         .from('sales_opportunity_tags')
         .select('*');
 
       if (error) throw error;
       return data || [];
-    },
+    }, 'useSalesOpportunityTags'),
     staleTime: 30000, // 30 seconds
   });
 };

@@ -38,7 +38,9 @@ const SalesPage: React.FC = () => {
     createOpportunity,
     moveOpportunity,
     updateOpportunity,
-    deleteOpportunity
+    deleteOpportunity,
+    addTagToOpportunity,
+    removeTagFromOpportunity
   } = useSalesKanbanMutations(selectedProject?.id);
 
   // Handle creating new opportunity
@@ -90,6 +92,24 @@ const SalesPage: React.FC = () => {
       console.error('Failed to update opportunity:', error);
     }
   }, [updateOpportunity]);
+
+  // Handle adding tag to opportunity
+  const handleAddTag = useCallback(async (opportunityId: string, tagId: string) => {
+    try {
+      await addTagToOpportunity.mutateAsync({ opportunityId, tagId });
+    } catch (error) {
+      console.error('Failed to add tag to opportunity:', error);
+    }
+  }, [addTagToOpportunity]);
+
+  // Handle removing tag from opportunity
+  const handleRemoveTag = useCallback(async (opportunityId: string, tagId: string) => {
+    try {
+      await removeTagFromOpportunity.mutateAsync({ opportunityId, tagId });
+    } catch (error) {
+      console.error('Failed to remove tag from opportunity:', error);
+    }
+  }, [removeTagFromOpportunity]);
 
   // Handle deleting opportunity
   const handleDeleteOpportunity = useCallback(async (opportunityId: string) => {
@@ -230,6 +250,8 @@ const SalesPage: React.FC = () => {
           onAddOpportunity={handleAddOpportunity}
           onUpdateOpportunity={handleUpdateOpportunity}
           onDeleteOpportunity={handleDeleteOpportunity}
+          onAddTag={handleAddTag}
+          onRemoveTag={handleRemoveTag}
           selectedProjectId={selectedProject?.id}
         />
       </main>

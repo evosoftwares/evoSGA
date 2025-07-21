@@ -3,6 +3,7 @@ import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { SalesColumn, SalesOpportunity, SalesTag, SalesOpportunityTag, Project, Profile } from '@/types/database';
 import SalesKanbanColumn from './SalesKanbanColumn';
 import OpportunityDetailModal from './OpportunityDetailModal';
+import DeleteOpportunityConfirmationModal from './DeleteOpportunityConfirmationModal';
 
 interface CreateOpportunityData {
   title: string;
@@ -33,6 +34,8 @@ interface SalesKanbanBoardProps {
   onAddOpportunity: (data: CreateOpportunityData) => Promise<void>;
   onUpdateOpportunity: (opportunityId: string, updates: Partial<SalesOpportunity>) => Promise<void>;
   onDeleteOpportunity: (opportunityId: string) => Promise<void>;
+  onAddTag?: (opportunityId: string, tagId: string) => Promise<void>;
+  onRemoveTag?: (opportunityId: string, tagId: string) => Promise<void>;
   selectedProjectId?: string;
 }
 
@@ -48,10 +51,14 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
   onAddOpportunity,
   onUpdateOpportunity,
   onDeleteOpportunity,
+  onAddTag,
+  onRemoveTag,
   selectedProjectId
 }) => {
   const [selectedOpportunity, setSelectedOpportunity] = useState<SalesOpportunity | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [opportunityToDelete, setOpportunityToDelete] = useState<SalesOpportunity | null>(null);
+  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
 
   // Filter opportunities by selected project if any
   const filteredOpportunities = useMemo(() => {
@@ -136,29 +143,34 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
     }
   }, [opportunities, columns, onMoveOpportunity]);
 
-  const handleOpportunityClick = useCallback((opportunity: SalesOpportunity) => {
+  const handleOpportunityClick = (opportunity: SalesOpportunity) => {
     setSelectedOpportunity(opportunity);
     setIsDetailModalOpen(true);
-  }, []);
+  };
 
-  const handleCloseModal = useCallback(() => {
-    setIsDetailModalOpen(false);
+  const handleCloseDetailModal = () => {
     setSelectedOpportunity(null);
-  }, []);
+    setIsDetailModalOpen(false);
+  };
 
-  const handleUpdateOpportunity = useCallback(async (updates: Partial<SalesOpportunity>) => {
-    if (selectedOpportunity) {
-      await onUpdateOpportunity(selectedOpportunity.id, updates);
-      setSelectedOpportunity(prev => prev ? { ...prev, ...updates } : null);
+  const handleDeleteOpportunity = async () => {
+    if (opportunityToDelete) {
+      await onDeleteOpportunity(opportunityToDelete.id);
+      setOpportunityToDelete(null);
+      setIsDeleteConfirmationOpen(false);
+      // Close detail modal if it's the same opportunity
+      if (selectedOpportunity?.id === opportunityToDelete.id) {
+        handleCloseDetailModal();
+      }
     }
-  }, [selectedOpportunity, onUpdateOpportunity]);
+  };
 
-  const handleDeleteOpportunity = useCallback(async () => {
+  const handleDeleteClick = () => {
     if (selectedOpportunity) {
-      await onDeleteOpportunity(selectedOpportunity.id);
-      handleCloseModal();
+      setOpportunityToDelete(selectedOpportunity);
+      setIsDeleteConfirmationOpen(true);
     }
-  }, [selectedOpportunity, onDeleteOpportunity, handleCloseModal]);
+  };
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-blue-50">
@@ -268,9 +280,11 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
         <OpportunityDetailModal
           opportunity={selectedOpportunity}
           isOpen={isDetailModalOpen}
-          onClose={handleCloseModal}
-          onUpdate={handleUpdateOpportunity}
-          onDelete={handleDeleteOpportunity}
+          onClose={handleCloseDetailModal}
+          onUpdate={(updates) => onUpdateOpportunity(selectedOpportunity.id, updates)}
+          onDelete={handleDeleteClick}
+          onAddTag={onAddTag ? (tagId) => onAddTag(selectedOpportunity.id, tagId) : undefined}
+          onRemoveTag={onRemoveTag ? (tagId) => onRemoveTag(selectedOpportunity.id, tagId) : undefined}
           tags={tags}
           opportunityTags={opportunityTags}
           projects={projects}
@@ -278,6 +292,16 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
           columns={columns}
         />
       )}
+
+      <DeleteOpportunityConfirmationModal
+        opportunity={opportunityToDelete}
+        isOpen={isDeleteConfirmationOpen}
+        onClose={() => {
+          setOpportunityToDelete(null);
+          setIsDeleteConfirmationOpen(false);
+        }}
+        onConfirm={handleDeleteOpportunity}
+      />
     </div>
   );
 };

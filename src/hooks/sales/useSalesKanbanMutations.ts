@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { SalesOpportunity } from '@/types/database';
 import { SALES_QUERY_KEYS } from './useSalesKanbanData';
+import { useSalesTagMutations } from './useSalesTagMutations';
 
 interface CreateOpportunityData {
   title: string;
@@ -33,6 +34,7 @@ interface UpdateOpportunityData {
 
 export const useSalesKanbanMutations = (projectId?: string) => {
   const queryClient = useQueryClient();
+  const salesTagMutations = useSalesTagMutations();
 
   // Create new opportunity
   const createOpportunityMutation = useMutation({
@@ -119,59 +121,15 @@ export const useSalesKanbanMutations = (projectId?: string) => {
   // Move opportunity between columns
   const moveOpportunityMutation = useMutation({
     mutationFn: async ({ opportunityId, destinationColumnId, newPosition }: MoveOpportunityData) => {
-      // Get all opportunities in the destination column
-      const { data: destinationOpportunities, error: fetchError } = await supabase
-        .from('sales_opportunities')
-        .select('id, position')
-        .eq('column_id', destinationColumnId)
-        .order('position', { ascending: true });
+      const { data, error } = await supabase
+        .rpc('move_sales_opportunity', {
+          p_opportunity_id: opportunityId,
+          p_new_column_id: destinationColumnId,
+          p_new_position: newPosition
+        });
 
-      if (fetchError) throw fetchError;
-
-      // Calculate new positions for all affected opportunities
-      const updates: Array<{ id: string; position: number; column_id?: string }> = [];
-
-      // First, update the moved opportunity
-      updates.push({
-        id: opportunityId,
-        position: newPosition,
-        column_id: destinationColumnId,
-      });
-
-      // Then update positions of other opportunities in destination column
-      destinationOpportunities.forEach((opp, index) => {
-        if (opp.id !== opportunityId) {
-          const adjustedPosition = index >= newPosition ? index + 1 : index;
-          if (opp.position !== adjustedPosition) {
-            updates.push({
-              id: opp.id,
-              position: adjustedPosition,
-            });
-          }
-        }
-      });
-
-      // Execute all updates in a transaction-like manner
-      const updatePromises = updates.map(update => {
-        const updateData: any = { position: update.position };
-        if (update.column_id) {
-          updateData.column_id = update.column_id;
-        }
-
-        return supabase
-          .from('sales_opportunities')
-          .update(updateData)
-          .eq('id', update.id);
-      });
-
-      const results = await Promise.all(updatePromises);
-      
-      // Check for errors
-      results.forEach(result => {
-        if (result.error) throw result.error;
-      });
-
-      return { success: true };
+      if (error) throw error;
+      return data;
     },
     // Optimistic update for instant UI feedback
     onMutate: async ({ opportunityId, destinationColumnId, newPosition }) => {
@@ -216,7 +174,6 @@ export const useSalesKanbanMutations = (projectId?: string) => {
         };
       });
 
-      console.log('✅ [SALES-OPTIMISTIC] Cache updated optimistically');
       return { previousData };
     },
     onError: (err, variables, context) => {
@@ -285,11 +242,19 @@ export const useSalesKanbanMutations = (projectId?: string) => {
   // Delete opportunity
   const deleteOpportunityMutation = useMutation({
     mutationFn: async (opportunityId: string) => {
+      // Deletar tags relacionadas primeiro
+      const { error: tagsError } = await supabase
+        .from('sales_opportunity_tags')
+        .delete()
+        .eq('opportunity_id', opportunityId);
+  
+      if (tagsError) throw tagsError;
+  
       const { error } = await supabase
         .from('sales_opportunities')
         .delete()
         .eq('id', opportunityId);
-
+  
       if (error) throw error;
       return { success: true };
     },
@@ -298,18 +263,18 @@ export const useSalesKanbanMutations = (projectId?: string) => {
       
       await queryClient.cancelQueries({ queryKey: SALES_QUERY_KEYS.salesKanban(projectId) });
       const previousData = queryClient.getQueryData(SALES_QUERY_KEYS.salesKanban(projectId));
-
+  
       queryClient.setQueryData(SALES_QUERY_KEYS.salesKanban(projectId), (old: any) => {
         if (!old) return old;
         
         const filteredOpportunities = old.opportunities.filter((opp: SalesOpportunity) => opp.id !== opportunityId);
-
+  
         return {
           ...old,
           opportunities: filteredOpportunities,
         };
       });
-
+  
       return { previousData };
     },
     onError: (err, variables, context) => {
@@ -395,5 +360,9 @@ export const useSalesKanbanMutations = (projectId?: string) => {
       isLoading: removeTagFromOpportunityMutation.isPending,
       error: removeTagFromOpportunityMutation.error,
     },
+    // Tag management functions
+    createSalesTag: salesTagMutations.createSalesTag,
+    updateSalesTag: salesTagMutations.updateSalesTag,
+    deleteSalesTag: salesTagMutations.deleteSalesTag,
   };
 };
