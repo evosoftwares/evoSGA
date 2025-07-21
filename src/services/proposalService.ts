@@ -136,6 +136,13 @@ class ProposalService {
 
       if (error) {
         logger.error('Error fetching proposals', error);
+        
+        // Check if it's a table/view not found error
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          logger.warn('proposal_summary view does not exist, returning empty array');
+          return []; // Gracefully return empty array
+        }
+        
         throw new Error('Erro ao buscar propostas: ' + error.message);
       }
 
@@ -143,6 +150,13 @@ class ProposalService {
 
     } catch (error) {
       logger.error('Error in getProposalsByOpportunity', error);
+      
+      // Check if it's a table/view not found error in catch block too
+      if (error instanceof Error && error.message?.includes('does not exist')) {
+        logger.warn('proposal_summary view does not exist, returning empty array');
+        return [];
+      }
+      
       throw error;
     }
   }

@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, Percent, User, Building2, Phone, Mail, Plus, Tag, Settings, FileText, Eye, Download, Clock } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, DollarSign, Calendar, Percent, User, Building2, Phone, Mail, Plus, FileText, Eye, Download, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { SalesOpportunity, SalesTag, SalesOpportunityTag, Project, Profile, SalesColumn, ProposalSummary } from '@/types/database';
+import { useToast } from '@/hooks/use-toast';
+import { SalesOpportunity, Project, Profile, SalesColumn, ProposalSummary } from '@/types/database';
 import DeleteOpportunityConfirmationModal from './DeleteOpportunityConfirmationModal';
-import SalesTagManager from './SalesTagManager';
 import { GenerateProposalModal } from './GenerateProposalModal';
 import { ProposalHistoryModal } from './ProposalHistoryModal';
 import { proposalService } from '@/services/proposalService';
@@ -19,13 +19,10 @@ interface OpportunityDetailModalProps {
   onClose: () => void;
   onUpdate: (updates: Partial<SalesOpportunity>) => Promise<void>;
   onDelete: () => Promise<void>;
-  tags: SalesTag[];
-  opportunityTags: SalesOpportunityTag[];
   projects: Project[];
   profiles: Profile[];
   columns: SalesColumn[];
-  onAddTag?: (opportunityId: string, tagId: string) => Promise<void>;
-  onRemoveTag?: (opportunityId: string, tagId: string) => Promise<void>;
+  onRefresh?: () => Promise<void>;
 }
 
 const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
@@ -34,20 +31,15 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
   onClose,
   onUpdate,
   onDelete,
-  tags,
-  opportunityTags,
   projects,
   profiles,
   columns,
-  onAddTag,
-  onRemoveTag
+  onRefresh
 }) => {
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<SalesOpportunity>>({});
-  const [isAddingTag, setIsAddingTag] = useState(false);
-  const [selectedTagToAdd, setSelectedTagToAdd] = useState('');
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
-  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
   const [isGenerateProposalOpen, setIsGenerateProposalOpen] = useState(false);
   const [isProposalHistoryOpen, setIsProposalHistoryOpen] = useState(false);
   const [proposals, setProposals] = useState<ProposalSummary[]>([]);
@@ -135,39 +127,6 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
   // Get project
   const project = projects.find(p => p.id === opportunity.project_id);
 
-  // Get opportunity tags
-  const currentTags = opportunityTags
-    .filter(ot => ot.opportunity_id === opportunity.id)
-    .map(ot => tags.find(tag => tag.id === ot.tag_id))
-    .filter(Boolean) as SalesTag[];
-
-  // Get available tags to add (not currently assigned)
-  const availableTags = tags.filter(tag => 
-    !currentTags.some(currentTag => currentTag.id === tag.id)
-  );
-
-  const handleAddTag = async () => {
-    if (selectedTagToAdd && onAddTag) {
-      try {
-        await onAddTag(opportunity.id, selectedTagToAdd);
-        setSelectedTagToAdd('');
-        setIsAddingTag(false);
-      } catch (error) {
-        console.error('Failed to add tag:', error);
-      }
-    }
-  };
-
-  const handleRemoveTag = async (tagId: string) => {
-    if (onRemoveTag) {
-      try {
-        await onRemoveTag(opportunity.id, tagId);
-      } catch (error) {
-        console.error('Failed to remove tag:', error);
-      }
-    }
-  };
-
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -205,60 +164,60 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
             </DialogDescription>
           </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6 p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8 px-6">
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-8">
             {/* Basic Information */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Informações Básicas</h3>
+            <div className="space-y-6">
+              <h3 className="text-xl font-medium text-gray-900 border-b border-gray-100 pb-3">Informações Básicas</h3>
               
-              <div className="space-y-3">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
+                  <label className="block text-sm text-gray-600 mb-2">Título</label>
                   {isEditing ? (
                     <Input
                       value={editData.title || ''}
                       onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+                      className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                     />
                   ) : (
-                    <p className="text-gray-900 font-medium">{opportunity.title}</p>
+                    <p className="text-lg text-gray-900 font-medium">{opportunity.title}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                  <label className="block text-sm text-gray-600 mb-2">Descrição</label>
                   {isEditing ? (
                     <Textarea
                       value={editData.description || ''}
                       onChange={(e) => setEditData({ ...editData, description: e.target.value })}
                       rows={3}
+                      className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                     />
                   ) : (
-                    <p className="text-gray-700">{opportunity.description || 'Sem descrição'}</p>
+                    <p className="text-gray-700 leading-relaxed">{opportunity.description || 'Sem descrição'}</p>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Valor do Negócio</label>
+                    <label className="block text-sm text-gray-600 mb-2">Valor do Negócio</label>
                     {isEditing ? (
                       <Input
                         type="number"
                         value={editData.deal_value || ''}
                         onChange={(e) => setEditData({ ...editData, deal_value: parseFloat(e.target.value) || 0 })}
+                        className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                       />
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-emerald-500" />
-                        <span className="text-lg font-bold text-emerald-700">
-                          {formatCurrency(opportunity.deal_value, opportunity.currency)}
-                        </span>
+                      <div className="text-2xl font-bold text-emerald-600">
+                        {formatCurrency(opportunity.deal_value, opportunity.currency)}
                       </div>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Probabilidade (%)</label>
+                    <label className="block text-sm text-gray-600 mb-2">Probabilidade</label>
                     {isEditing ? (
                       <Input
                         type="number"
@@ -266,43 +225,40 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
                         max="100"
                         value={editData.probability || ''}
                         onChange={(e) => setEditData({ ...editData, probability: parseInt(e.target.value) || 0 })}
+                        className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                       />
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <Percent className="w-4 h-4 text-blue-500" />
-                        <span className="text-lg font-bold text-blue-700">{opportunity.probability}%</span>
-                      </div>
+                      <div className="text-2xl font-bold text-blue-600">{opportunity.probability}%</div>
                     )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Data Esperada de Fechamento</label>
+                    <label className="block text-sm text-gray-600 mb-2">Data Esperada</label>
                     {isEditing ? (
                       <Input
                         type="date"
                         value={editData.expected_close_date || ''}
                         onChange={(e) => setEditData({ ...editData, expected_close_date: e.target.value })}
+                        className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                       />
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-amber-500" />
-                        <span className="text-gray-700">{formatDate(opportunity.expected_close_date)}</span>
-                      </div>
+                      <div className="text-gray-900">{formatDate(opportunity.expected_close_date)}</div>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Fonte</label>
+                    <label className="block text-sm text-gray-600 mb-2">Fonte</label>
                     {isEditing ? (
                       <Input
                         value={editData.source || ''}
                         onChange={(e) => setEditData({ ...editData, source: e.target.value })}
                         placeholder="Ex: Website, LinkedIn, Indicação..."
+                        className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                       />
                     ) : (
-                      <span className="text-gray-700 capitalize">{opportunity.source || 'Não especificada'}</span>
+                      <div className="text-gray-900 capitalize">{opportunity.source || 'Não especificada'}</div>
                     )}
                   </div>
                 </div>
@@ -310,68 +266,60 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
             </div>
 
             {/* Client Information */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Informações do Cliente</h3>
+            <div className="space-y-6">
+              <h3 className="text-xl font-medium text-gray-900 border-b border-gray-100 pb-3">Cliente</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Cliente</label>
+                  <label className="block text-sm text-gray-600 mb-2">Nome</label>
                   {isEditing ? (
                     <Input
                       value={editData.client_name || ''}
                       onChange={(e) => setEditData({ ...editData, client_name: e.target.value })}
+                      className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                     />
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-500" />
-                      <span className="text-gray-700">{opportunity.client_name || 'Não informado'}</span>
-                    </div>
+                    <div className="text-gray-900">{opportunity.client_name || 'Não informado'}</div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
+                  <label className="block text-sm text-gray-600 mb-2">Empresa</label>
                   {isEditing ? (
                     <Input
                       value={editData.client_company || ''}
                       onChange={(e) => setEditData({ ...editData, client_company: e.target.value })}
+                      className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                     />
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-gray-500" />
-                      <span className="text-gray-700">{opportunity.client_company || 'Não informada'}</span>
-                    </div>
+                    <div className="text-gray-900">{opportunity.client_company || 'Não informada'}</div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                  <label className="block text-sm text-gray-600 mb-2">E-mail</label>
                   {isEditing ? (
                     <Input
                       type="email"
                       value={editData.client_email || ''}
                       onChange={(e) => setEditData({ ...editData, client_email: e.target.value })}
+                      className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                     />
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-gray-500" />
-                      <span className="text-gray-700">{opportunity.client_email || 'Não informado'}</span>
-                    </div>
+                    <div className="text-gray-900">{opportunity.client_email || 'Não informado'}</div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
+                  <label className="block text-sm text-gray-600 mb-2">Telefone</label>
                   {isEditing ? (
                     <Input
                       value={editData.client_phone || ''}
                       onChange={(e) => setEditData({ ...editData, client_phone: e.target.value })}
+                      className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0"
                     />
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-gray-500" />
-                      <span className="text-gray-700">{opportunity.client_phone || 'Não informado'}</span>
-                    </div>
+                    <div className="text-gray-900">{opportunity.client_phone || 'Não informado'}</div>
                   )}
                 </div>
               </div>
@@ -379,29 +327,25 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-4">
+          <div className="space-y-8">
             {/* Status */}
-            <div className="bg-white p-3 rounded-lg border border-gray-200">
-              <h4 className="font-semibold text-gray-900 mb-2">Status</h4>
-              <div className="space-y-2">
+            <div className="space-y-4">
+              <h4 className="text-lg font-medium text-gray-900 border-b border-gray-100 pb-2">Status</h4>
+              <div className="space-y-4">
                 <div>
-                  <span className="text-sm text-gray-600">Estágio Atual</span>
-                  <div className="mt-1">
-                    <Badge variant="outline" className={`bg-${currentStage?.color}-50 text-${currentStage?.color}-700 border-${currentStage?.color}-200`}>
-                      {currentStage?.title}
-                    </Badge>
-                  </div>
+                  <span className="block text-sm text-gray-600 mb-2">Estágio Atual</span>
+                  <div className="text-gray-900 font-medium">{currentStage?.title}</div>
                 </div>
 
                 <div>
-                  <span className="text-sm text-gray-600">Responsável</span>
-                  <div className="mt-1">
+                  <span className="block text-sm text-gray-600 mb-2">Responsável</span>
+                  <div>
                     {isEditing ? (
                       <Select
                         value={editData.assignee || ''}
                         onValueChange={(value) => setEditData({ ...editData, assignee: value })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="border-0 border-b border-gray-200 rounded-none px-0 focus:border-blue-500 focus:ring-0">
                           <SelectValue placeholder="Selecionar responsável" />
                         </SelectTrigger>
                         <SelectContent>
@@ -413,212 +357,93 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
                         </SelectContent>
                       </Select>
                     ) : (
-                      <span className="text-gray-900">{assignee?.name || 'Não atribuído'}</span>
+                      <div className="text-gray-900">{assignee?.name || 'Não atribuído'}</div>
                     )}
                   </div>
                 </div>
 
                 {project && (
                   <div>
-                    <span className="text-sm text-gray-600">Projeto</span>
-                    <div className="mt-1">
-                      <Badge variant="outline" style={{ backgroundColor: `${project.color}20`, color: project.color }}>
-                        {project.name}
-                      </Badge>
-                    </div>
+                    <span className="block text-sm text-gray-600 mb-2">Projeto</span>
+                    <div className="text-gray-900">{project.name}</div>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Tags */}
-            <div className="bg-white p-3 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-semibold text-gray-900">Tags</h4>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsTagManagerOpen(true)}
-                    className="h-7 px-2 text-gray-600 hover:text-gray-900"
-                    title="Gerenciar Tags"
-                  >
-                    <Settings className="w-3 h-3" />
-                  </Button>
-                  {!isEditing && onAddTag && availableTags.length > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsAddingTag(true)}
-                      className="h-7 px-2"
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      Adicionar
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Add Tag Select */}
-              {isAddingTag && (
-                <div className="mb-3 p-2 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={selectedTagToAdd}
-                      onValueChange={setSelectedTagToAdd}
-                    >
-                      <SelectTrigger className="h-8 text-sm">
-                        <SelectValue placeholder="Selecionar tag" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableTags.map(tag => (
-                          <SelectItem key={tag.id} value={tag.id}>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: tag.color }}
-                              />
-                              {tag.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      size="sm"
-                      onClick={handleAddTag}
-                      disabled={!selectedTagToAdd}
-                      className="h-8 px-3"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setIsAddingTag(false);
-                        setSelectedTagToAdd('');
-                      }}
-                      className="h-8 px-3"
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Current Tags */}
-              <div className="flex flex-wrap gap-2">
-                {currentTags.map(tag => (
-                  <div key={tag.id} className="group relative">
-                    <Badge
-                      variant="secondary"
-                      className="pr-6"
-                      style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                    >
-                      <Tag className="w-3 h-3 mr-1" />
-                      {tag.name}
-                    </Badge>
-                    {!isEditing && onRemoveTag && (
-                      <button
-                        onClick={() => handleRemoveTag(tag.id)}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {currentTags.length === 0 && (
-                  <span className="text-sm text-gray-500">Nenhuma tag</span>
                 )}
               </div>
             </div>
 
             {/* Proposals Section */}
-            <div className="bg-white p-3 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-semibold text-gray-900">Propostas</h4>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                <h4 className="text-lg font-medium text-gray-900">Propostas</h4>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => setIsGenerateProposalOpen(true)}
-                  className="h-8 px-3"
+                  className="h-8 px-3 text-sm text-gray-600 hover:text-gray-900"
                   disabled={isEditing}
                 >
-                  <FileText className="w-3 h-3 mr-1" />
+                  <Plus className="w-4 h-4 mr-1" />
                   Nova Proposta
                 </Button>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {proposals.length > 0 ? (
                   proposals.slice(0, 3).map((proposal) => (
                     <div 
                       key={proposal.id} 
-                      className="p-2 border border-gray-100 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+                      className="group p-3 border border-gray-100 rounded-lg hover:border-gray-200 transition-colors cursor-pointer"
                       onClick={() => setIsProposalHistoryOpen(true)}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-3 h-3 text-blue-500" />
-                            <span className="text-sm font-medium text-gray-900 truncate">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full ${
+                              proposal.status === 'draft' ? 'bg-gray-400' :
+                              proposal.status === 'sent' ? 'bg-blue-500' :
+                              proposal.status === 'viewed' ? 'bg-yellow-500' :
+                              proposal.status === 'accepted' ? 'bg-green-500' :
+                              'bg-red-500'
+                            }`} />
+                            <span className="text-sm font-medium text-gray-900">
                               {proposal.title}
                             </span>
-                            <Badge
-                              variant="secondary"
-                              className={`text-xs ${
-                                proposal.status === 'draft' ? 'bg-gray-100 text-gray-700' :
-                                proposal.status === 'sent' ? 'bg-blue-100 text-blue-700' :
-                                proposal.status === 'viewed' ? 'bg-yellow-100 text-yellow-700' :
-                                proposal.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                                'bg-red-100 text-red-700'
-                              }`}
-                            >
-                              {proposal.status === 'draft' ? 'Rascunho' :
-                               proposal.status === 'sent' ? 'Enviado' :
-                               proposal.status === 'viewed' ? 'Visualizado' :
-                               proposal.status === 'accepted' ? 'Aceito' :
-                               'Rejeitado'}
-                            </Badge>
                           </div>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs text-gray-500">
-                              {formatCurrency(proposal.total_price || 0)}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {formatDate(proposal.created_at)}
-                            </span>
+                          
+                          <div className="flex items-center gap-4 text-sm text-gray-600">
+                            <span>{formatCurrency(proposal.total_price || 0)}</span>
+                            <span>•</span>
+                            <span>{formatDate(proposal.created_at)}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-6 w-6 p-0"
+                            className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
                             title="Visualizar proposta"
                             onClick={() => setIsProposalHistoryOpen(true)}
                           >
-                            <Eye className="w-3 h-3" />
+                            <Eye className="w-4 h-4" />
                           </Button>
+                          
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-6 w-6 p-0"
+                            className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
                             title="Baixar PDF"
                           >
-                            <Download className="w-3 h-3" />
+                            <Download className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-4">
-                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Nenhuma proposta criada</p>
-                    <p className="text-xs text-gray-400">Clique em "Nova Proposta" para começar</p>
+                  <div className="text-center py-8 text-gray-400">
+                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Nenhuma proposta criada</p>
                   </div>
                 )}
 
@@ -638,27 +463,27 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
             </div>
 
             {/* Timestamps */}
-            <div className="bg-white p-3 rounded-lg border border-gray-200">
-              <h4 className="font-semibold text-gray-900 mb-2">Histórico</h4>
-              <div className="space-y-2 text-sm">
+            <div className="space-y-4">
+              <h4 className="text-lg font-medium text-gray-900 border-b border-gray-100 pb-2">Histórico</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-600">Criado em:</span>
-                  <div className="text-gray-900">{formatDate(opportunity.created_at)}</div>
+                  <span className="block text-gray-600 mb-1">Criado em</span>
+                  <span className="text-gray-900">{formatDate(opportunity.created_at)}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">Última atualização:</span>
-                  <div className="text-gray-900">{formatDate(opportunity.updated_at)}</div>
+                  <span className="block text-gray-600 mb-1">Atualizado em</span>
+                  <span className="text-gray-900">{formatDate(opportunity.updated_at)}</span>
                 </div>
                 {opportunity.won_date && (
                   <div>
-                    <span className="text-gray-600">Data de fechamento:</span>
-                    <div className="text-emerald-700 font-medium">{formatDate(opportunity.won_date)}</div>
+                    <span className="block text-gray-600 mb-1">Fechamento</span>
+                    <span className="text-emerald-700 font-medium">{formatDate(opportunity.won_date)}</span>
                   </div>
                 )}
                 {opportunity.lost_date && (
                   <div>
-                    <span className="text-gray-600">Data de perda:</span>
-                    <div className="text-red-700 font-medium">{formatDate(opportunity.lost_date)}</div>
+                    <span className="block text-gray-600 mb-1">Perda</span>
+                    <span className="text-red-700 font-medium">{formatDate(opportunity.lost_date)}</span>
                   </div>
                 )}
               </div>
@@ -675,11 +500,7 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
         onConfirm={handleDeleteConfirm}
       />
 
-      <SalesTagManager
-        isOpen={isTagManagerOpen}
-        onClose={() => setIsTagManagerOpen(false)}
-        tags={tags}
-      />
+
 
       <GenerateProposalModal
         isOpen={isGenerateProposalOpen}

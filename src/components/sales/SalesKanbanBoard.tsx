@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
-import { SalesColumn, SalesOpportunity, SalesTag, SalesOpportunityTag, Project, Profile } from '@/types/database';
+import { SalesColumn, SalesOpportunity, Project, Profile } from '@/types/database';
 import SalesKanbanColumn from './SalesKanbanColumn';
 import OpportunityDetailModal from './OpportunityDetailModal';
 import DeleteOpportunityConfirmationModal from './DeleteOpportunityConfirmationModal';
@@ -25,8 +25,6 @@ interface CreateOpportunityData {
 interface SalesKanbanBoardProps {
   columns: SalesColumn[];
   opportunities: SalesOpportunity[];
-  tags: SalesTag[];
-  opportunityTags: SalesOpportunityTag[];
   projects: Project[];
   profiles: Profile[];
   commentCounts: Record<string, number>;
@@ -34,16 +32,13 @@ interface SalesKanbanBoardProps {
   onAddOpportunity: (data: CreateOpportunityData) => Promise<void>;
   onUpdateOpportunity: (opportunityId: string, updates: Partial<SalesOpportunity>) => Promise<void>;
   onDeleteOpportunity: (opportunityId: string) => Promise<void>;
-  onAddTag?: (opportunityId: string, tagId: string) => Promise<void>;
-  onRemoveTag?: (opportunityId: string, tagId: string) => Promise<void>;
+  onRefresh?: () => Promise<void>;
   selectedProjectId?: string;
 }
 
 const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
   columns,
   opportunities,
-  tags,
-  opportunityTags,
   projects,
   profiles,
   commentCounts,
@@ -51,8 +46,7 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
   onAddOpportunity,
   onUpdateOpportunity,
   onDeleteOpportunity,
-  onAddTag,
-  onRemoveTag,
+  onRefresh,
   selectedProjectId
 }) => {
   const [selectedOpportunity, setSelectedOpportunity] = useState<SalesOpportunity | null>(null);
@@ -260,8 +254,6 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
                   key={column.id}
                   column={column}
                   opportunities={filteredOpportunities}
-                  tags={tags}
-                  opportunityTags={opportunityTags}
                   projects={projects}
                   profiles={profiles}
                   columns={columns}
@@ -283,10 +275,7 @@ const SalesKanbanBoard: React.FC<SalesKanbanBoardProps> = ({
           onClose={handleCloseDetailModal}
           onUpdate={(updates) => onUpdateOpportunity(selectedOpportunity.id, updates)}
           onDelete={handleDeleteClick}
-          onAddTag={onAddTag ? (tagId) => onAddTag(selectedOpportunity.id, tagId) : undefined}
-          onRemoveTag={onRemoveTag ? (tagId) => onRemoveTag(selectedOpportunity.id, tagId) : undefined}
-          tags={tags}
-          opportunityTags={opportunityTags}
+          onRefresh={onRefresh ? async () => { await onRefresh(); } : undefined}
           projects={projects}
           profiles={profiles}
           columns={columns}

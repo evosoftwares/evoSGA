@@ -12,21 +12,44 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  prevChildren: ReactNode;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
-    errorInfo: null
+    errorInfo: null,
+    prevChildren: null
   };
 
-  public static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     return {
       hasError: true,
       error,
       errorInfo: null
     };
+  }
+
+  public static getDerivedStateFromProps(props: Props, state: State): Partial<State> | null {
+    // Reset error state if children have changed
+    if (props.children !== state.prevChildren && state.hasError) {
+      return {
+        hasError: false,
+        error: null,
+        errorInfo: null,
+        prevChildren: props.children
+      };
+    }
+    
+    // Update prevChildren to track changes
+    if (props.children !== state.prevChildren) {
+      return {
+        prevChildren: props.children
+      };
+    }
+    
+    return null;
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {

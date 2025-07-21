@@ -4,7 +4,7 @@ import { Plus, ChevronDown, ChevronRight, FolderOpen, Folder, DollarSign, Trendi
 import OpportunityCard from './OpportunityCard';
 import CreateOpportunityModal from './CreateOpportunityModal';
 import { ProjectBadge } from '@/components/projects/ProjectBadge';
-import { SalesColumn, SalesOpportunity, SalesTag, SalesOpportunityTag, Project, Profile } from '@/types/database';
+import { SalesColumn, SalesOpportunity, Project, Profile } from '@/types/database';
 
 interface CreateOpportunityData {
   title: string;
@@ -26,8 +26,6 @@ interface CreateOpportunityData {
 interface SalesKanbanColumnProps {
   column: SalesColumn;
   opportunities: SalesOpportunity[];
-  tags: SalesTag[];
-  opportunityTags: SalesOpportunityTag[];
   projects: Project[];
   profiles: Profile[];
   columns: SalesColumn[];
@@ -39,8 +37,6 @@ interface SalesKanbanColumnProps {
 const SalesKanbanColumn: React.FC<SalesKanbanColumnProps> = ({ 
   column, 
   opportunities, 
-  tags, 
-  opportunityTags, 
   projects,
   profiles,
   columns,
@@ -178,8 +174,6 @@ const SalesKanbanColumn: React.FC<SalesKanbanColumnProps> = ({
             onClick={() => onOpportunityClick(opportunity)}
             teamMembers={profiles}
             projects={projects}
-            tags={tags}
-            opportunityTags={opportunityTags}
             columns={columns}
             commentCounts={commentCounts}
           />
@@ -235,8 +229,6 @@ const SalesKanbanColumn: React.FC<SalesKanbanColumnProps> = ({
                   onClick={() => onOpportunityClick(opportunity)}
                   teamMembers={profiles}
                   projects={projects}
-                  tags={tags}
-                  opportunityTags={opportunityTags}
                   columns={columns}
                   commentCounts={commentCounts}
                 />
@@ -373,8 +365,6 @@ const SalesKanbanColumn: React.FC<SalesKanbanColumnProps> = ({
                   onClick={() => onOpportunityClick(opportunity)}
                   teamMembers={profiles}
                   projects={projects}
-                  tags={tags}
-                  opportunityTags={opportunityTags}
                   columns={columns}
                   commentCounts={commentCounts}
                 />

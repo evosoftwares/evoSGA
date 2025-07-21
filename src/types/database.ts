@@ -203,17 +203,7 @@ export interface SalesOpportunity {
   created_by?: string;
 }
 
-export interface SalesTag {
-  id: string;
-  name: string;
-  color: string;
-  created_at: string;
-}
 
-export interface SalesOpportunityTag {
-  opportunity_id: string;
-  tag_id: string;
-}
 
 export interface SalesComment {
   id: string;

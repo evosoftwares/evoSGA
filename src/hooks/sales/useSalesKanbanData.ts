@@ -1,13 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { SalesColumn, SalesOpportunity, SalesTag, SalesOpportunityTag, Profile } from '@/types/database';
+import { SalesColumn, SalesOpportunity, Profile } from '@/types/database';
 import { useAuthenticatedRequest } from '@/hooks/useAuthenticatedRequest';
 
 interface SalesKanbanData {
   columns: SalesColumn[];
   opportunities: SalesOpportunity[];
-  tags: SalesTag[];
-  opportunityTags: SalesOpportunityTag[];
   profiles: Profile[];
 }
 
@@ -15,8 +13,6 @@ const SALES_QUERY_KEYS = {
   salesKanban: (projectId?: string) => ['sales-kanban', projectId],
   salesColumns: ['sales-columns'],
   salesOpportunities: (projectId?: string) => ['sales-opportunities', projectId],
-  salesTags: ['sales-tags'],
-  salesOpportunityTags: ['sales-opportunity-tags'],
 } as const;
 
 export const useSalesKanbanData = (projectId?: string) => {
@@ -30,8 +26,6 @@ export const useSalesKanbanData = (projectId?: string) => {
       const [
         columnsResult,
         opportunitiesResult,
-        tagsResult,
-        opportunityTagsResult,
         profilesResult
       ] = await Promise.all([
         // Fetch sales columns
@@ -52,16 +46,6 @@ export const useSalesKanbanData = (projectId?: string) => {
               .select('*')
               .order('position', { ascending: true }),
 
-        // Fetch sales tags
-        projectId
-          ? supabase.from('sales_tags').select('*').eq('project_id', projectId).order('name', { ascending: true })
-          : supabase.from('sales_tags').select('*').order('name', { ascending: true }),
-
-        // Opportunity Tags com filtro (assumindo campo project_id em opportunities para join indireto; ajuste se necessário)
-        projectId
-          ? supabase.from('sales_opportunity_tags').select('*, sales_opportunities(project_id)').match({ 'sales_opportunities.project_id': projectId })
-          : supabase.from('sales_opportunity_tags').select('*'),
-
         // Fetch active profiles
         supabase
           .from('profiles')
@@ -79,14 +63,6 @@ export const useSalesKanbanData = (projectId?: string) => {
         console.error('❌ [SALES] Error fetching sales_opportunities:', opportunitiesResult.error);
         throw new Error(`Erro ao carregar oportunidades: ${opportunitiesResult.error.message}`);
       }
-      if (tagsResult.error) {
-        console.error('❌ [SALES] Error fetching sales_tags:', tagsResult.error);
-        throw new Error(`Erro ao carregar tags de vendas: ${tagsResult.error.message}`);
-      }
-      if (opportunityTagsResult.error) {
-        console.error('❌ [SALES] Error fetching sales_opportunity_tags:', opportunityTagsResult.error);
-        throw new Error(`Erro ao carregar relacionamentos de tags: ${opportunityTagsResult.error.message}`);
-      }
       if (profilesResult.error) {
         console.error('❌ [SALES] Error fetching profiles:', profilesResult.error);
         throw new Error(`Erro ao carregar perfis: ${profilesResult.error.message}`);
@@ -95,16 +71,12 @@ export const useSalesKanbanData = (projectId?: string) => {
       console.log('✅ [SALES] Successfully loaded sales data:', {
         columns: columnsResult.data?.length || 0,
         opportunities: opportunitiesResult.data?.length || 0,
-        tags: tagsResult.data?.length || 0,
-        opportunityTags: opportunityTagsResult.data?.length || 0,
         profiles: profilesResult.data?.length || 0
       });
 
       return {
         columns: columnsResult.data || [],
         opportunities: opportunitiesResult.data || [],
-        tags: tagsResult.data || [],
-        opportunityTags: opportunityTagsResult.data || [],
         profiles: profilesResult.data || []
       };
     }, 'useSalesKanbanData'),
@@ -141,7 +113,12 @@ export const useSalesOpportunities = (projectId?: string) => {
     queryFn: () => executeRequest(async () => {
       let query = supabase
         .from('sales_opportunities')
-        .select('*')
+        .select(`
+          *,
+          sales_columns!inner(id, title, position, color),
+          assignee:profiles(id, name, avatar_url),
+          project:projects(id, name)
+        `)
         .order('position', { ascending: true });
 
       if (projectId) {
@@ -151,45 +128,11 @@ export const useSalesOpportunities = (projectId?: string) => {
       const { data, error } = await query;
 
       if (error) throw error;
+      
+      console.log('💼 [OPPORTUNITIES-QUERY] Oportunidades carregadas:', data);
+      
       return data || [];
     }, 'useSalesOpportunities'),
-    staleTime: 30000, // 30 seconds
-  });
-};
-
-// Hook for sales tags
-export const useSalesTags = () => {
-  const { executeRequest } = useAuthenticatedRequest();
-
-  return useQuery<SalesTag[]>({
-    queryKey: SALES_QUERY_KEYS.salesTags,
-    queryFn: () => executeRequest(async () => {
-      const { data, error } = await supabase
-        .from('sales_tags')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      return data || [];
-    }, 'useSalesTags'),
-    staleTime: 60000, // 1 minute
-  });
-};
-
-// Hook for opportunity tags relationships
-export const useSalesOpportunityTags = () => {
-  const { executeRequest } = useAuthenticatedRequest();
-
-  return useQuery<SalesOpportunityTag[]>({
-    queryKey: SALES_QUERY_KEYS.salesOpportunityTags,
-    queryFn: () => executeRequest(async () => {
-      const { data, error } = await supabase
-        .from('sales_opportunity_tags')
-        .select('*');
-
-      if (error) throw error;
-      return data || [];
-    }, 'useSalesOpportunityTags'),
     staleTime: 30000, // 30 seconds
   });
 };

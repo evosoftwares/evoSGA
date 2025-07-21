@@ -33,22 +33,7 @@ export const useSalesRealTime = ({ projectId, enabled = true }: UseSalesRealTime
           queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesColumns });
         }
       },
-      {
-        table: 'sales_tags',
-        callback: (payload: any) => {
-          console.log('Sales tag change:', payload);
-          queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesKanban(projectId) });
-          queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesTags });
-        }
-      },
-      {
-        table: 'sales_opportunity_tags',
-        callback: (payload: any) => {
-          console.log('Sales opportunity tag change:', payload);
-          queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesKanban(projectId) });
-          queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesOpportunityTags });
-        }
-      },
+
       {
         table: 'sales_comments',
         callback: (payload: any) => {

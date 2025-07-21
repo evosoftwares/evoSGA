@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { SalesOpportunity } from '@/types/database';
 import { SALES_QUERY_KEYS } from './useSalesKanbanData';
-import { useSalesTagMutations } from './useSalesTagMutations';
 
 interface CreateOpportunityData {
   title: string;
@@ -34,7 +33,6 @@ interface UpdateOpportunityData {
 
 export const useSalesKanbanMutations = (projectId?: string) => {
   const queryClient = useQueryClient();
-  const salesTagMutations = useSalesTagMutations();
 
   // Create new opportunity
   const createOpportunityMutation = useMutation({
@@ -242,14 +240,6 @@ export const useSalesKanbanMutations = (projectId?: string) => {
   // Delete opportunity
   const deleteOpportunityMutation = useMutation({
     mutationFn: async (opportunityId: string) => {
-      // Deletar tags relacionadas primeiro
-      const { error: tagsError } = await supabase
-        .from('sales_opportunity_tags')
-        .delete()
-        .eq('opportunity_id', opportunityId);
-  
-      if (tagsError) throw tagsError;
-  
       const { error } = await supabase
         .from('sales_opportunities')
         .delete()
@@ -289,56 +279,7 @@ export const useSalesKanbanMutations = (projectId?: string) => {
     },
   });
 
-  // Add tag to opportunity
-  const addTagToOpportunityMutation = useMutation({
-    mutationFn: async ({ opportunityId, tagId }: { opportunityId: string; tagId: string }) => {
-      // Check if the tag already exists for this opportunity
-      const { data: existingTag, error: fetchError } = await supabase
-        .from('sales_opportunity_tags')
-        .select('id')
-        .eq('opportunity_id', opportunityId)
-        .eq('tag_id', tagId)
-        .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found
-        throw fetchError;
-      }
-
-      if (existingTag) {
-        console.warn(`Tag ${tagId} already exists for opportunity ${opportunityId}. Skipping insertion.`);
-        return { success: true, message: 'Tag already exists' };
-      }
-
-      const { error } = await supabase
-        .from('sales_opportunity_tags')
-        .insert({ opportunity_id: opportunityId, tag_id: tagId });
-
-      if (error) throw error;
-      return { success: true };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesKanban(projectId) });
-      queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesOpportunityTags });
-    },
-  });
-
-  // Remove tag from opportunity
-  const removeTagFromOpportunityMutation = useMutation({
-    mutationFn: async ({ opportunityId, tagId }: { opportunityId: string; tagId: string }) => {
-      const { error } = await supabase
-        .from('sales_opportunity_tags')
-        .delete()
-        .eq('opportunity_id', opportunityId)
-        .eq('tag_id', tagId);
-
-      if (error) throw error;
-      return { success: true };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesKanban(projectId) });
-      queryClient.invalidateQueries({ queryKey: SALES_QUERY_KEYS.salesOpportunityTags });
-    },
-  });
 
   return {
     createOpportunity: {
@@ -365,21 +306,6 @@ export const useSalesKanbanMutations = (projectId?: string) => {
       isLoading: deleteOpportunityMutation.isPending,
       error: deleteOpportunityMutation.error,
     },
-    addTagToOpportunity: {
-      mutate: addTagToOpportunityMutation.mutate,
-      mutateAsync: addTagToOpportunityMutation.mutateAsync,
-      isLoading: addTagToOpportunityMutation.isPending,
-      error: addTagToOpportunityMutation.error,
-    },
-    removeTagFromOpportunity: {
-      mutate: removeTagFromOpportunityMutation.mutate,
-      mutateAsync: removeTagFromOpportunityMutation.mutateAsync,
-      isLoading: removeTagFromOpportunityMutation.isPending,
-      error: removeTagFromOpportunityMutation.error,
-    },
-    // Tag management functions
-    createSalesTag: salesTagMutations.createSalesTag,
-    updateSalesTag: salesTagMutations.updateSalesTag,
-    deleteSalesTag: salesTagMutations.deleteSalesTag,
+
   };
 };

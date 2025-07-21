@@ -98,13 +98,12 @@ class CacheInvalidationManager {
       }
       
       // Add sales invalidation support
-      if (types.some(t => ['sales_opportunities', 'sales_columns', 'sales_tags', 'sales_opportunity_tags', 'sales_comments', 'sales_activities'].includes(t))) {
+      if (types.some(t => ['sales_opportunities', 'sales_columns', 'sales_comments', 'sales_activities'].includes(t))) {
         console.log(`🔥 [CACHE-INVALIDATION] Invalidating sales queries`);
         // Import SALES_QUERY_KEYS if available
         this.queryClient!.invalidateQueries({ queryKey: ['salesKanban'] });
         this.queryClient!.invalidateQueries({ queryKey: ['salesOpportunities'] });
         this.queryClient!.invalidateQueries({ queryKey: ['salesColumns'] });
-        this.queryClient!.invalidateQueries({ queryKey: ['salesTags'] });
       }
       
       if (types.includes('tags')) {

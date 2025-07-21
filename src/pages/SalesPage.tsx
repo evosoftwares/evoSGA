@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useProjectContext } from '@/contexts/ProjectContext';
 import { useOptimizedProjectData } from '@/hooks/useOptimizedProjectData';
 import { useSalesKanbanData } from '@/hooks/sales/useSalesKanbanData';
@@ -9,15 +10,23 @@ import SalesKanbanBoard from '@/components/sales/SalesKanbanBoard';
 import Header from '@/components/layout/Header';
 import { Loader2, AlertCircle, TrendingUp } from 'lucide-react';
 import { SalesOpportunity } from '@/types/database';
+import { Button } from '@/components/ui/button';
 
 const SalesPage: React.FC = () => {
-  const { selectedProject } = useProjectContext();
+  const queryClient = useQueryClient();
+  const { selectedProjectId } = useProjectContext();
   
   // Fetch projects data
-  const { data: projectsData } = useOptimizedProjectData();
+  const { projects } = useOptimizedProjectData();
+  
+  // Get selected project from projects data
+  const selectedProject = useMemo(() => {
+    if (!selectedProjectId || !projects) return null;
+    return projects.find(p => p.id === selectedProjectId) || null;
+  }, [selectedProjectId, projects]);
   
   // Set up real-time subscriptions
-  useSalesRealTime({ projectId: selectedProject?.id });
+  useSalesRealTime({ projectId: selectedProjectId });
 
   // Fetch sales data
   const {
@@ -25,7 +34,7 @@ const SalesPage: React.FC = () => {
     isLoading,
     error,
     refetch
-  } = useSalesKanbanData(selectedProject?.id);
+  } = useSalesKanbanData(selectedProjectId);
 
   // Get comment counts
   const {
@@ -38,10 +47,8 @@ const SalesPage: React.FC = () => {
     createOpportunity,
     moveOpportunity,
     updateOpportunity,
-    deleteOpportunity,
-    addTagToOpportunity,
-    removeTagFromOpportunity
-  } = useSalesKanbanMutations(selectedProject?.id);
+    deleteOpportunity
+  } = useSalesKanbanMutations(selectedProjectId);
 
   // Handle creating new opportunity
   const handleAddOpportunity = useCallback(async (data: any) => {
@@ -53,13 +60,13 @@ const SalesPage: React.FC = () => {
 
       await createOpportunity.mutateAsync({
         ...data,
-        project_id: data.project_id || selectedProject?.id,
+        project_id: data.project_id || selectedProjectId,
         assignee: data.assignee || jeffersonProfile?.id, // Assign to Jefferson by default
       });
     } catch (error) {
       console.error('Failed to create opportunity:', error);
     }
-  }, [createOpportunity, selectedProject?.id, salesData?.profiles]);
+  }, [createOpportunity, selectedProjectId, salesData?.profiles]);
 
   // Handle moving opportunity
   const handleMoveOpportunity = useCallback(async (
@@ -92,24 +99,6 @@ const SalesPage: React.FC = () => {
       console.error('Failed to update opportunity:', error);
     }
   }, [updateOpportunity]);
-
-  // Handle adding tag to opportunity
-  const handleAddTag = useCallback(async (opportunityId: string, tagId: string) => {
-    try {
-      await addTagToOpportunity.mutateAsync({ opportunityId, tagId });
-    } catch (error) {
-      console.error('Failed to add tag to opportunity:', error);
-    }
-  }, [addTagToOpportunity]);
-
-  // Handle removing tag from opportunity
-  const handleRemoveTag = useCallback(async (opportunityId: string, tagId: string) => {
-    try {
-      await removeTagFromOpportunity.mutateAsync({ opportunityId, tagId });
-    } catch (error) {
-      console.error('Failed to remove tag from opportunity:', error);
-    }
-  }, [removeTagFromOpportunity]);
 
   // Handle deleting opportunity
   const handleDeleteOpportunity = useCallback(async (opportunityId: string) => {
@@ -241,18 +230,25 @@ const SalesPage: React.FC = () => {
         <SalesKanbanBoard
           columns={salesData.columns}
           opportunities={salesData.opportunities}
-          tags={salesData.tags}
-          opportunityTags={salesData.opportunityTags}
-          projects={projectsData?.projects || []}
+          projects={projects || []}
           profiles={salesData.profiles}
           commentCounts={commentCounts}
           onMoveOpportunity={handleMoveOpportunity}
           onAddOpportunity={handleAddOpportunity}
           onUpdateOpportunity={handleUpdateOpportunity}
           onDeleteOpportunity={handleDeleteOpportunity}
-          onAddTag={handleAddTag}
-          onRemoveTag={handleRemoveTag}
-          selectedProjectId={selectedProject?.id}
+          onRefresh={async () => { 
+            console.log('🔄 [REFRESH] Forcing aggressive cache invalidation...');
+            
+            // Invalidar todas as queries relacionadas
+            queryClient.invalidateQueries({ queryKey: ['sales-kanban'] });
+            
+            // Forçar refetch
+            await refetch(); 
+            
+            console.log('✅ [REFRESH] Cache invalidation completed');
+          }}
+          selectedProjectId={selectedProjectId}
         />
       </main>
 

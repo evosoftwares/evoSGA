@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
-import { DollarSign, User, MessageCircle, Tag, Calendar, TrendingUp, Phone, Mail, Building2, FileText } from 'lucide-react';
-import { SalesOpportunity, Profile, Project, SalesTag, SalesColumn } from '@/types/database';
+import { DollarSign, User, MessageCircle, Calendar, TrendingUp, Phone, Mail, Building2, FileText } from 'lucide-react';
+import { SalesOpportunity, Profile, Project, SalesColumn } from '@/types/database';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ProjectBadge } from '@/components/projects/ProjectBadge';
@@ -13,8 +13,6 @@ interface OpportunityCardProps {
   onClick: () => void;
   teamMembers: Profile[];
   projects: Project[];
-  tags: SalesTag[];
-  opportunityTags: { opportunity_id: string; tag_id: string }[];
   columns: SalesColumn[];
   commentCounts: Record<string, number>;
 }
@@ -25,8 +23,6 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
   onClick, 
   teamMembers, 
   projects, 
-  tags, 
-  opportunityTags,
   columns,
   commentCounts
 }) => {
@@ -38,10 +34,6 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
 
   // Encontrar o projeto associado
   const project = projects.find(p => p.id === opportunity.project_id);
-
-  // Encontrar as tags da oportunidade
-  const opportunityTagIds = opportunityTags.filter(ot => ot.opportunity_id === opportunity.id).map(ot => ot.tag_id);
-  const opportunityTagList = tags.filter(tag => opportunityTagIds.includes(tag.id));
 
   // Verificar se a oportunidade está na coluna "Fechado"
   const currentColumn = columns.find(col => col.id === opportunity.column_id);
@@ -205,28 +197,6 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
                 }`}>
                   {opportunity.description}
                 </p>
-              </div>
-            )}
-
-            {/* Tags */}
-            {opportunityTagList.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {opportunityTagList.slice(0, 3).map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    variant="secondary"
-                    className="text-xs px-2.5 py-1 h-6 font-medium rounded-full transition-colors hover:opacity-80"
-                    style={{ backgroundColor: tag.color + '15', color: tag.color, borderColor: tag.color + '40' }}
-                  >
-                    <Tag className="w-3 h-3 mr-1.5" />
-                    <span className="truncate max-w-20">{tag.name}</span>
-                  </Badge>
-                ))}
-                {opportunityTagList.length > 3 && (
-                  <Badge variant="outline" className="text-xs px-2.5 py-1 h-6 rounded-full font-medium bg-gray-50">
-                    +{opportunityTagList.length - 3}
-                  </Badge>
-                )}
               </div>
             )}
 
