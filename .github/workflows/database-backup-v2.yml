@@ -19,7 +19,7 @@ jobs:
 
       - name: Install Supabase CLI
         run: |
-          # Install Supabase CLI using GitHub API to find correct asset
+          # Install Supabase CLI - download binary directly (not tarball)
           echo "Finding latest Supabase CLI release..."
           
           # Get the download URL for Linux AMD64 from GitHub API
@@ -33,28 +33,23 @@ jobs:
           fi
           
           echo "Download URL: $DOWNLOAD_URL"
-          echo "Downloading Supabase CLI..."
+          echo "Downloading Supabase CLI binary..."
           
-          # Download and verify
-          curl -fsSL -o supabase.tar.gz "$DOWNLOAD_URL"
+          # Download binary directly (not a tarball!)
+          curl -fsSL -o supabase "$DOWNLOAD_URL"
           
           # Check if download was successful
-          if [ ! -s supabase.tar.gz ]; then
+          if [ ! -s supabase ]; then
             echo "❌ Download failed or file is empty"
             exit 1
           fi
           
-          echo "File downloaded successfully: $(ls -lh supabase.tar.gz)"
+          echo "File downloaded successfully: $(ls -lh supabase)"
+          echo "File type: $(file supabase)"
           
-          echo "Extracting..."
-          tar -xzf supabase.tar.gz
-          
-          echo "Installing..."
+          echo "Making executable and installing..."
+          chmod +x supabase
           sudo mv supabase /usr/local/bin/supabase
-          sudo chmod +x /usr/local/bin/supabase
-          
-          echo "Cleaning up..."
-          rm supabase.tar.gz
           
           echo "Verifying installation..."
           supabase --version
