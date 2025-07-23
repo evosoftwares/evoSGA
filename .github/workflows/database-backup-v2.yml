@@ -19,13 +19,43 @@ jobs:
 
       - name: Install Supabase CLI
         run: |
-          # Install Supabase CLI using direct binary download - NO NPM!
-          SUPABASE_VERSION="1.215.5"
-          echo "Downloading Supabase CLI v${SUPABASE_VERSION}..."
-          curl -Lo supabase.tar.gz "https://github.com/supabase/cli/releases/download/v${SUPABASE_VERSION}/supabase_linux_amd64.tar.gz"
+          # Install Supabase CLI using GitHub API to find correct asset
+          echo "Finding latest Supabase CLI release..."
+          
+          # Get the download URL for Linux AMD64 from GitHub API
+          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/supabase/cli/releases/latest | \
+            grep -o '"browser_download_url": "[^"]*linux_amd64[^"]*"' | \
+            grep -o 'https://[^"]*' | head -1)
+          
+          if [ -z "$DOWNLOAD_URL" ]; then
+            echo "❌ Could not find download URL for Linux AMD64"
+            exit 1
+          fi
+          
+          echo "Download URL: $DOWNLOAD_URL"
+          echo "Downloading Supabase CLI..."
+          
+          # Download and verify
+          curl -fsSL -o supabase.tar.gz "$DOWNLOAD_URL"
+          
+          # Check if download was successful
+          if [ ! -s supabase.tar.gz ]; then
+            echo "❌ Download failed or file is empty"
+            exit 1
+          fi
+          
+          echo "File downloaded successfully: $(ls -lh supabase.tar.gz)"
+          
+          echo "Extracting..."
           tar -xzf supabase.tar.gz
-          sudo mv supabase /usr/local/bin/
+          
+          echo "Installing..."
+          sudo mv supabase /usr/local/bin/supabase
+          sudo chmod +x /usr/local/bin/supabase
+          
+          echo "Cleaning up..."
           rm supabase.tar.gz
+          
           echo "Verifying installation..."
           supabase --version
 
