@@ -36,7 +36,9 @@ jobs:
 
       - name: Install Supabase CLI
         run: |
-          npm install -g supabase@latest
+          # Install Supabase CLI using the official method
+          curl -fsSL https://get.supabase.com | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Validate backup file
         run: |
@@ -54,13 +56,16 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_ID: dgkcpzvcotwmfcmhtrjh
+          DATABASE_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.dgkcpzvcotwmfcmhtrjh.supabase.co:5432/postgres
         run: |
+          # Login to Supabase
+          echo $SUPABASE_ACCESS_TOKEN | supabase auth login --token
           # Create a backup before restoration
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           PRE_RESTORE_BACKUP="backups/pre_restore_${TIMESTAMP}.sql"
           
           echo "Creating pre-restore backup..."
-          supabase db dump --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD > $PRE_RESTORE_BACKUP
+          supabase db dump --project-ref $SUPABASE_PROJECT_ID > $PRE_RESTORE_BACKUP
           gzip $PRE_RESTORE_BACKUP
           echo "✅ Pre-restore backup created: ${PRE_RESTORE_BACKUP}.gz"
 
@@ -69,7 +74,10 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_ID: dgkcpzvcotwmfcmhtrjh
+          DATABASE_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.dgkcpzvcotwmfcmhtrjh.supabase.co:5432/postgres
         run: |
+          # Login to Supabase
+          echo $SUPABASE_ACCESS_TOKEN | supabase auth login --token
           BACKUP_FILE="${{ github.event.inputs.backup_file }}"
           
           # Decompress backup if needed
@@ -85,8 +93,8 @@ jobs:
           echo "⚠️  This will overwrite all current data!"
           
           # Reset database and restore
-          supabase db reset --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD
-          supabase db push --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD < "$RESTORE_FILE"
+          supabase db reset --project-ref $SUPABASE_PROJECT_ID
+          psql "$DATABASE_URL" < "$RESTORE_FILE"
           
           # Cleanup
           [ -f temp_restore.sql ] && rm temp_restore.sql
@@ -98,14 +106,15 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_ID: dgkcpzvcotwmfcmhtrjh
+          DATABASE_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.dgkcpzvcotwmfcmhtrjh.supabase.co:5432/postgres
         run: |
           echo "Verifying database restoration..."
           
           # Basic verification queries
-          supabase db query --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD \
+          psql "$DATABASE_URL" -c \
             "SELECT COUNT(*) as total_tables FROM information_schema.tables WHERE table_schema = 'public';"
             
-          supabase db query --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD \
+          psql "$DATABASE_URL" -c \
             "SELECT schemaname, tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
           
           echo "✅ Database verification completed"
