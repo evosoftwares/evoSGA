@@ -19,33 +19,60 @@ jobs:
 
       - name: Install Supabase CLI
         run: |
-          # Install Supabase CLI - download binary directly (not tarball)
+          # Install Supabase CLI - download binary directly using jq for robust JSON parsing
           echo "Finding latest Supabase CLI release..."
           
-          # Get the download URL for Linux AMD64 from GitHub API
-          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/supabase/cli/releases/latest | \
-            grep -o '"browser_download_url": "[^"]*linux_amd64[^"]*"' | \
-            grep -o 'https://[^"]*' | head -1)
+          # Get release data and debug
+          echo "Fetching release data from GitHub API..."
+          RELEASE_DATA=$(curl -s https://api.github.com/repos/supabase/cli/releases/latest)
           
-          if [ -z "$DOWNLOAD_URL" ]; then
+          # Debug: Show available assets
+          echo "Available assets:"
+          echo "$RELEASE_DATA" | jq -r '.assets[].name' || {
+            echo "❌ Failed to parse JSON or jq not available. Trying fallback method..."
+            echo "Release data preview:"
+            echo "$RELEASE_DATA" | head -20
+            
+            # Fallback: try different patterns
+            DOWNLOAD_URL=$(echo "$RELEASE_DATA" | grep -o '"browser_download_url":[^"]*"[^"]*linux.*amd64[^"]*"' | grep -o 'https://[^"]*' | head -1)
+            if [ -z "$DOWNLOAD_URL" ]; then
+              DOWNLOAD_URL=$(echo "$RELEASE_DATA" | grep -o '"browser_download_url":[^"]*"[^"]*linux[^"]*"' | grep -o 'https://[^"]*' | head -1)
+            fi
+          }
+          
+          # Primary method: use jq for robust parsing
+          if command -v jq >/dev/null 2>&1; then
+            echo "Using jq for JSON parsing..."
+            DOWNLOAD_URL=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.name | test("linux.*amd64")) | .browser_download_url' | head -1)
+            
+            if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+              echo "No linux-amd64 found, trying broader pattern..."
+              DOWNLOAD_URL=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.name | test("linux")) | .browser_download_url' | head -1)
+            fi
+          fi
+          
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
             echo "❌ Could not find download URL for Linux AMD64"
+            echo "Available assets:"
+            echo "$RELEASE_DATA" | jq -r '.assets[].name' 2>/dev/null || echo "$RELEASE_DATA" | grep '"name"' | head -10
             exit 1
           fi
           
-          echo "Download URL: $DOWNLOAD_URL"
+          echo "✅ Download URL found: $DOWNLOAD_URL"
           echo "Downloading Supabase CLI binary..."
           
-          # Download binary directly (not a tarball!)
+          # Download binary directly
           curl -fsSL -o supabase "$DOWNLOAD_URL"
           
           # Check if download was successful
           if [ ! -s supabase ]; then
             echo "❌ Download failed or file is empty"
+            ls -la supabase 2>/dev/null || echo "File doesn't exist"
             exit 1
           fi
           
           echo "File downloaded successfully: $(ls -lh supabase)"
-          echo "File type: $(file supabase)"
+          echo "File type: $(file supabase 2>/dev/null || echo 'file command not available')"
           
           echo "Making executable and installing..."
           chmod +x supabase
