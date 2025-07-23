@@ -1,0 +1,134 @@
+name: Database Backup v2
+
+on:
+  schedule:
+    # Run every hour at minute 0
+    - cron: '0 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Supabase CLI
+        run: |
+          # Install Supabase CLI using direct binary download - NO NPM!
+          SUPABASE_VERSION="1.215.5"
+          echo "Downloading Supabase CLI v${SUPABASE_VERSION}..."
+          curl -Lo supabase.tar.gz "https://github.com/supabase/cli/releases/download/v${SUPABASE_VERSION}/supabase_linux_amd64.tar.gz"
+          tar -xzf supabase.tar.gz
+          sudo mv supabase /usr/local/bin/
+          rm supabase.tar.gz
+          echo "Verifying installation..."
+          supabase --version
+
+      - name: Create backup directory
+        run: |
+          mkdir -p backups/$(date +%Y)/$(date +%m)
+
+      - name: Generate database backup
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: dgkcpzvcotwmfcmhtrjh
+        run: |
+          # Create timestamp
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          BACKUP_FILE="backups/$(date +%Y)/$(date +%m)/backup_${TIMESTAMP}.sql"
+          
+          echo "Starting backup process..."
+          echo "Backup file: $BACKUP_FILE"
+          
+          # Export database schema and data
+          echo "-- =============================================" > $BACKUP_FILE
+          echo "-- EvoSGA Database Backup - $TIMESTAMP" >> $BACKUP_FILE
+          echo "-- Generated automatically by GitHub Actions v2" >> $BACKUP_FILE
+          echo "-- =============================================" >> $BACKUP_FILE
+          echo "" >> $BACKUP_FILE
+          
+          # Login to Supabase and perform dump
+          echo "Authenticating with Supabase..."
+          echo $SUPABASE_ACCESS_TOKEN | supabase auth login --token
+          
+          echo "Performing database dump..."
+          supabase db dump --project-ref $SUPABASE_PROJECT_ID >> $BACKUP_FILE
+          
+          # Verify backup file was created and has content
+          if [ -s "$BACKUP_FILE" ]; then
+            echo "✅ Backup created successfully: $BACKUP_FILE"
+            echo "Backup size: $(wc -l < $BACKUP_FILE) lines"
+          else
+            echo "❌ Error: Backup file is empty or was not created"
+            exit 1
+          fi
+
+      - name: Compress backup
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          BACKUP_DIR="backups/$(date +%Y)/$(date +%m)"
+          cd $BACKUP_DIR
+          gzip backup_${TIMESTAMP}.sql
+          echo "✅ Backup compressed: backup_${TIMESTAMP}.sql.gz"
+
+      - name: Clean old backups (keep last 168 hours = 7 days)
+        run: |
+          # Remove backups older than 7 days to save space
+          find backups -name "*.sql.gz" -type f -mtime +7 -delete
+          echo "✅ Old backups cleaned up"
+
+      - name: Commit and push backup
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Backup v2"
+          git add backups/
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            TIMESTAMP=$(date +%Y-%m-%d_%H:%M:%S)
+            git commit -m "chore: automated database backup v2 $TIMESTAMP"
+            git push
+            echo "✅ Backup committed and pushed successfully"
+          fi
+
+      - name: Create backup summary
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          echo "## Database Backup Summary v2 - $TIMESTAMP" > backup_summary.md
+          echo "" >> backup_summary.md
+          echo "- **Timestamp:** $(date)" >> backup_summary.md
+          echo "- **Status:** ✅ Success" >> backup_summary.md
+          echo "- **Method:** Direct CLI Binary (no npm)" >> backup_summary.md
+          echo "- **Files created:** $(find backups -name "*${TIMESTAMP}*" | wc -l)" >> backup_summary.md
+          echo "- **Total backup size:** $(du -sh backups/ | cut -f1)" >> backup_summary.md
+          echo "- **Backup retention:** 7 days (168 hours)" >> backup_summary.md
+          echo "" >> backup_summary.md
+          echo "### Recent backups:" >> backup_summary.md
+          find backups -name "*.sql.gz" -type f -mtime -1 | sort -r | head -24 | while read file; do
+            echo "- \`$file\` ($(stat -c%Y "$file" | xargs -I{} date -d @{} '+%Y-%m-%d %H:%M:%S'))" >> backup_summary.md
+          done
+
+      - name: Upload backup summary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-summary-v2
+          path: backup_summary.md
+          retention-days: 30
+
+  notify:
+    needs: backup
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Notify on failure
+        run: |
+          echo "❌ Database backup v2 failed at $(date)"
+          echo "Please check the workflow logs for details"
