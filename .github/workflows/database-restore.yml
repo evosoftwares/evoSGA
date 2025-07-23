@@ -126,7 +126,7 @@ jobs:
           echo "- Verify your application functionality after restoration" >> restore_summary.md
 
       - name: Upload restore summary as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: restore-summary
           path: restore_summary.md

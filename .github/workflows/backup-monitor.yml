@@ -98,7 +98,7 @@ jobs:
           echo "Health report generated: $REPORT_FILE"
 
       - name: Upload health report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: backup-health-report
           path: backup_health_report_*.md
