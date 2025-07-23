@@ -1,0 +1,130 @@
+name: Backup Health Monitor
+
+on:
+  schedule:
+    # Run daily at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check backup health
+        run: |
+          echo "🔍 Checking backup system health..."
+          
+          # Check if backups directory exists
+          if [ ! -d "backups" ]; then
+            echo "❌ Backups directory not found"
+            exit 1
+          fi
+          
+          # Check for recent backups (last 2 hours)
+          RECENT_BACKUPS=$(find backups -name "*.sql.gz" -type f -mtime -0.084 | wc -l)
+          
+          if [ $RECENT_BACKUPS -eq 0 ]; then
+            echo "⚠️ No backups found in the last 2 hours"
+            echo "This could indicate a backup failure"
+          else
+            echo "✅ Found $RECENT_BACKUPS recent backup(s)"
+          fi
+          
+          # Check total backup count
+          TOTAL_BACKUPS=$(find backups -name "*.sql.gz" -type f | wc -l)
+          echo "📊 Total backups: $TOTAL_BACKUPS"
+          
+          # Check backup sizes
+          echo "📁 Backup directory size: $(du -sh backups/ | cut -f1)"
+          
+          # List recent backups
+          echo ""
+          echo "🕒 Last 10 backups:"
+          find backups -name "*.sql.gz" -type f -exec ls -lah {} \; | sort -k6,7 -r | head -10
+
+      - name: Generate health report
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          REPORT_FILE="backup_health_report_${TIMESTAMP}.md"
+          
+          echo "# Backup System Health Report" > $REPORT_FILE
+          echo "Generated: $(date)" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          # System status
+          RECENT_BACKUPS=$(find backups -name "*.sql.gz" -type f -mtime -0.084 | wc -l)
+          TOTAL_BACKUPS=$(find backups -name "*.sql.gz" -type f | wc -l)
+          BACKUP_SIZE=$(du -sh backups/ | cut -f1)
+          
+          if [ $RECENT_BACKUPS -gt 0 ]; then
+            echo "## ✅ System Status: HEALTHY" >> $REPORT_FILE
+          else
+            echo "## ⚠️ System Status: WARNING" >> $REPORT_FILE
+          fi
+          
+          echo "" >> $REPORT_FILE
+          echo "### 📊 Statistics" >> $REPORT_FILE
+          echo "- Recent backups (last 2 hours): $RECENT_BACKUPS" >> $REPORT_FILE
+          echo "- Total backups: $TOTAL_BACKUPS" >> $REPORT_FILE
+          echo "- Storage used: $BACKUP_SIZE" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "### 🕒 Recent Backup Files" >> $REPORT_FILE
+          find backups -name "*.sql.gz" -type f -printf "%T@ %p\n" | sort -nr | head -10 | while read timestamp file; do
+            date_str=$(date -d @${timestamp%.*} '+%Y-%m-%d %H:%M:%S')
+            echo "- \`$file\` - $date_str" >> $REPORT_FILE
+          done
+          
+          echo "" >> $REPORT_FILE
+          echo "### 🔧 Recommendations" >> $REPORT_FILE
+          
+          if [ $RECENT_BACKUPS -eq 0 ]; then
+            echo "- ⚠️ Check backup workflow - no recent backups found" >> $REPORT_FILE
+            echo "- Verify GitHub Actions are running successfully" >> $REPORT_FILE
+            echo "- Check Supabase credentials and connectivity" >> $REPORT_FILE
+          fi
+          
+          if [ $TOTAL_BACKUPS -gt 500 ]; then
+            echo "- Consider adjusting backup retention policy" >> $REPORT_FILE
+          fi
+          
+          echo "- Regular backup testing recommended" >> $REPORT_FILE
+          echo "- Monitor storage usage" >> $REPORT_FILE
+          
+          echo "Health report generated: $REPORT_FILE"
+
+      - name: Upload health report
+        uses: actions/upload-artifact@v3
+        with:
+          name: backup-health-report
+          path: backup_health_report_*.md
+          retention-days: 30
+
+      - name: Check backup workflow status
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Checking recent backup workflow runs..."
+          
+          # Get the latest workflow runs for backup
+          curl -H "Authorization: token $GITHUB_TOKEN" \
+               -H "Accept: application/vnd.github.v3+json" \
+               "https://api.github.com/repos/${{ github.repository }}/actions/workflows/database-backup.yml/runs?per_page=5" \
+               | jq -r '.workflow_runs[] | "\(.conclusion // "running") - \(.created_at) - \(.html_url)"' \
+               | head -5 > recent_runs.txt
+          
+          echo "📋 Recent backup workflow runs:"
+          cat recent_runs.txt
+          
+          # Check for failures
+          FAILED_RUNS=$(grep -c "failure" recent_runs.txt || true)
+          if [ $FAILED_RUNS -gt 0 ]; then
+            echo "⚠️ Found $FAILED_RUNS failed backup runs in recent history"
+            echo "Please investigate workflow failures"
+          else
+            echo "✅ No recent backup workflow failures detected"
+          fi

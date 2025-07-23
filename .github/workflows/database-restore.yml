@@ -1,0 +1,145 @@
+name: Database Restore
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_file:
+        description: 'Backup file path (e.g., backups/2025/01/backup_20250122_140000.sql.gz)'
+        required: true
+        type: string
+      confirm_restore:
+        description: 'Type "CONFIRM_RESTORE" to proceed with database restoration'
+        required: true
+        type: string
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm_restore }}" != "CONFIRM_RESTORE" ]; then
+            echo "❌ Restore not confirmed. Please type 'CONFIRM_RESTORE' exactly."
+            exit 1
+          fi
+          echo "✅ Restore confirmed"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Supabase CLI
+        run: |
+          npm install -g supabase@latest
+
+      - name: Validate backup file
+        run: |
+          BACKUP_FILE="${{ github.event.inputs.backup_file }}"
+          if [ ! -f "$BACKUP_FILE" ]; then
+            echo "❌ Backup file not found: $BACKUP_FILE"
+            echo "Available backups:"
+            find backups -name "*.sql.gz" -type f | head -10
+            exit 1
+          fi
+          echo "✅ Backup file found: $BACKUP_FILE"
+
+      - name: Create pre-restore backup
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: dgkcpzvcotwmfcmhtrjh
+        run: |
+          # Create a backup before restoration
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          PRE_RESTORE_BACKUP="backups/pre_restore_${TIMESTAMP}.sql"
+          
+          echo "Creating pre-restore backup..."
+          supabase db dump --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD > $PRE_RESTORE_BACKUP
+          gzip $PRE_RESTORE_BACKUP
+          echo "✅ Pre-restore backup created: ${PRE_RESTORE_BACKUP}.gz"
+
+      - name: Restore database
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: dgkcpzvcotwmfcmhtrjh
+        run: |
+          BACKUP_FILE="${{ github.event.inputs.backup_file }}"
+          
+          # Decompress backup if needed
+          if [[ $BACKUP_FILE == *.gz ]]; then
+            echo "Decompressing backup..."
+            gunzip -c "$BACKUP_FILE" > temp_restore.sql
+            RESTORE_FILE="temp_restore.sql"
+          else
+            RESTORE_FILE="$BACKUP_FILE"
+          fi
+          
+          echo "Starting database restoration..."
+          echo "⚠️  This will overwrite all current data!"
+          
+          # Reset database and restore
+          supabase db reset --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD
+          supabase db push --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD < "$RESTORE_FILE"
+          
+          # Cleanup
+          [ -f temp_restore.sql ] && rm temp_restore.sql
+          
+          echo "✅ Database restoration completed"
+
+      - name: Verify restoration
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: dgkcpzvcotwmfcmhtrjh
+        run: |
+          echo "Verifying database restoration..."
+          
+          # Basic verification queries
+          supabase db query --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD \
+            "SELECT COUNT(*) as total_tables FROM information_schema.tables WHERE table_schema = 'public';"
+            
+          supabase db query --project-id $SUPABASE_PROJECT_ID --password $SUPABASE_DB_PASSWORD \
+            "SELECT schemaname, tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
+          
+          echo "✅ Database verification completed"
+
+      - name: Create restore summary
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          echo "## Database Restoration Summary - $TIMESTAMP" > restore_summary.md
+          echo "" >> restore_summary.md
+          echo "- **Timestamp:** $(date)" >> restore_summary.md
+          echo "- **Status:** ✅ Success" >> restore_summary.md
+          echo "- **Restored from:** ${{ github.event.inputs.backup_file }}" >> restore_summary.md
+          echo "- **Pre-restore backup:** backups/pre_restore_${TIMESTAMP}.sql.gz" >> restore_summary.md
+          echo "" >> restore_summary.md
+          echo "### ⚠️ Important Notes:" >> restore_summary.md
+          echo "- All previous data has been replaced with the backup data" >> restore_summary.md
+          echo "- A pre-restore backup was created for safety" >> restore_summary.md
+          echo "- Verify your application functionality after restoration" >> restore_summary.md
+
+      - name: Upload restore summary as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: restore-summary
+          path: restore_summary.md
+          retention-days: 30
+
+  notify-failure:
+    needs: restore
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Notify on failure
+        run: |
+          echo "❌ Database restoration failed at $(date)"
+          echo "Backup file: ${{ github.event.inputs.backup_file }}"
+          echo "Please check the workflow logs and contact system administrator"
