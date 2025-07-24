@@ -6,9 +6,8 @@ import { useProjectContext } from '@/contexts/ProjectContext';
 import { useSecurityCheck } from '@/hooks/useSecurityCheck';
 import { useUserPoints } from '@/hooks/useUserPoints';
 import { useTaskCommentCounts } from '@/hooks/useTaskCommentCounts';
-import { useProjectsRealTime } from '@/hooks/useProjectsRealTime';
 import { TaskDetailModal } from '../modals/TaskDetailModal';
-import { Task, Column } from '@/types/database';
+import { Task, KanbanColumn as Column } from '@/types/database';
 import ErrorBoundary from '../ErrorBoundary';
 import GenericKanban from './GenericKanban';
 import { CelebrationConfig } from './types';
@@ -16,15 +15,10 @@ import { CelebrationConfig } from './types';
 const KanbanBoard = () => {
   const { selectedProjectId } = useProjectContext();
   const { projects } = useProjectData();
-  const { getTaskPointAward, userPoints } = useUserPoints();
-  
-  // Activate real-time subscriptions
-  useProjectsRealTime();
+  const { userPoints } = useUserPoints();
   
   // Internal state for task modals
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const [creatingTaskColumn, setCreatingTaskColumn] = useState<Column['id'] | null>(null);
 
   // Custom celebration config
   const celebrationConfig: CelebrationConfig = {
@@ -97,9 +91,6 @@ const KanbanBoard = () => {
     setSelectedTask(task);
   };
 
-  const handleTaskCreate = (taskData: Partial<Task>) => {
-    // This will be handled by GenericKanban, just for typing
-  };
 
   // Get data hook instance
   const dataHook = useOptimizedKanbanData(selectedProjectId);
@@ -149,7 +140,7 @@ const KanbanBoard = () => {
 
       {/* Task Detail Modal */}
       {selectedTask && (
-        <ErrorBoundary name="TaskDetailModal-Edit">
+        <ErrorBoundary>
           <TaskDetailModal
             task={selectedTask}
             isOpen={true}
