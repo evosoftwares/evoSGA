@@ -1,7 +1,7 @@
 
 import React from 'react';
 import Header from '@/components/layout/Header';
-import KanbanBoard from '@/components/KanbanBoard';
+import KanbanBoard from '@/components/kanban/KanbanBoard';
 
 const Index = () => {
   return (
